@@ -29,14 +29,14 @@ For a classroom laptop that is already offline, copy both prepared folders onto 
 
 ### Workbench controls
 
-- **Change temperature.** Drag the slider or use the arrow keys for exact 0.25°C steps. **Virtual sensor file** shows the raw contents in millidegrees. Hover over the filename for its full path, also printed by the launcher.
-- **Warm, cool or hold.** **Warm probe** adds 0.5°C each second. **Cool probe** subtracts 0.5°C each second. Choose **Hold** to keep the current value. Moving the slider or reaching −55°C or 125°C also stops the adjustment. The local service sets this classroom demonstration rate.
-- **Unplug and reconnect.** Choose **Disconnect probe**. The diagram shows empty contacts at F13–F15, the device disappears from the virtual bus, and temperature controls pause. Wait for Python to print `SENSOR ERROR`, then choose **Reconnect probe**. The same probe returns at its last temperature in Hold. The PID beside **Python output** identifies the monitor throughout the run.
-- **Read the terminal.** **Python output** shows up to 60 recent lines captured from the companion process. The file changes as you move the slider. The monitor prints its next reading on its own two-second interval and warns only above 30°C.
+- **Change temperature.** Use the probe controls above the diagram. Drag the slider or use the arrow keys for exact 0.25°C steps. **Virtual sensor file** under the Python log shows the raw value in millidegrees. Hover over its name for the full path, also printed by the launcher.
+- **Warm, cool or hold.** **Warm** adds 0.5°C each second. **Cool** subtracts 0.5°C each second. Choose **Hold** to keep the current value. Moving the slider or reaching −55°C or 125°C also stops the adjustment. The local service sets this classroom demonstration rate.
+- **Unplug and reconnect.** Select the DS18B20 on the diagram, then choose **Unplug from circuit** in the inspector. The socket at F13–F15 becomes empty and Python prints `SENSOR ERROR`. Select the empty socket and choose **Insert into circuit** to resume at the last temperature. The probe controls at the top also have **Disconnect probe** and **Reconnect probe** buttons for these actions.
+- **Read the records.** Choose **Python log** in the top navigation. The full-width **Python output** panel groups the monitor's actual output by time, reading and status. It keeps up to 60 lines. Scroll back to read earlier samples and choose **Latest** to follow new ones again. The monitor samples every two seconds and warns only above 30°C.
 
-Click a wire on the diagram, or Tab to its connection button and press Enter or Space. Try **1-Wire data** followed by **Pull-up resistor**. Both reach the DQ strip, but their other ends and purposes differ. Use **+** to enlarge the board, scroll to inspect its holes, and choose **Fit** to restore the whole drawing.
+Click a wire or one of the probe's three pin contacts to trace a connection. Its two ends and purpose appear in the inspector. Click the Pi, breadboard or probe to inspect the part and trace a related wire. For keyboard access use the wire buttons or the **Components** menu. Use **+** to zoom in, drag or scroll to pan, and choose **Fit** to see the whole circuit again.
 
-![PiThermal workbench showing Warm, Cool and Hold controls beside the circuit and Python temperature readings](docs/circuit-workbench.png)
+![PiThermal with probe controls above the circuit, the selected part in the inspector, and Python readings in the full-width log below](docs/circuit-workbench.png)
 
 ## The classroom demo
 
@@ -47,8 +47,8 @@ Run the rows in order. Give Python time to print a new line before moving to the
 | Select the data wire | Both endpoints light up. Labels identify the probe's DQ pin and the Pi's GPIO4. |
 | Set the slider to 27.5°C | The sensor file contains `27500`. On its next sample Python prints `27.500 °C  NORMAL` with a timestamp. |
 | Set exactly 30°C, wait for a reading, then set 31.25°C | With the default 30°C threshold, Python first prints `30.000 °C  NORMAL`, then `31.250 °C  WARNING`. |
-| Set 29.5°C, wait for a reading, then press **Warm probe** | Python starts at `NORMAL`. Let it sample a temperature above 30°C and print `WARNING`. |
-| Press **Cool probe**, then **Hold** when the warning clears | The file value falls every second. Python prints `NORMAL` on its first sample at or below 30°C. |
+| Set 29.5°C, wait for a reading, then press **Warm** | Python starts at `NORMAL`. Let it sample a temperature above 30°C and print `WARNING`. |
+| Press **Cool**, then **Hold** when the warning clears | The file value falls every second. Python prints `NORMAL` on its first sample at or below 30°C. |
 | Set 27.5°C, wait for `NORMAL`, then press **Disconnect probe** | The probe disappears from the drawing and the file viewer says **File absent**. Wait for Python to print `SENSOR ERROR  No DS18B20 found`. |
 | Press **Reconnect probe**, wait for 27.5°C, then move the slider to 28.25°C | The same file returns. Python first prints `27.500 °C  NORMAL`, then `28.250 °C  NORMAL`. The monitor PID stays the same. |
 
@@ -59,7 +59,7 @@ To run the demo a second time from the beginning, press **Ctrl+C** in the launch
 | What you see | What to do |
 | --- | --- |
 | The launcher asks for the hardware checkout | Put both repos in the same parent folder, or supply the actual path with `python -m simulator --hardware-dir "../path to checkout"`. |
-| The launcher reports that the port is in use | For the classroom demo, run `python -m simulator --port 8766` and open its printed URL. The automated browser checks use port 8765. |
+| The launcher reports that the port is in use | For the classroom demo, run `python -m simulator --port 8766` and open its printed URL. The automated browser checks default to port 8765. |
 | Only the wiring diagram appears | The static server serves the diagram alone. Start `python -m simulator` from the simulation repo and open the address it prints to get the live probe controls. |
 | The file changed but Python still shows the previous reading | Wait for the next timestamp. The monitor samples every two seconds. Exactly 30°C is `NORMAL`. |
 
@@ -106,7 +106,9 @@ npm --prefix tests test
 python -B -m unittest discover -s tests -v
 ```
 
-The npm test command operates the controls in the live workbench. To use Chrome on Windows, set `$env:PITHERMAL_BROWSER_CHANNEL = "chrome"` before running it. `npm --prefix tests run test:circuit` runs the nine wiring checks alone. The simulator Python tests start their own temporary probe. For a nonstandard hardware checkout, set `PITHERMAL_TEST_HARDWARE` to its path. To run the companion project's Python tests, run the same unittest command from the `pithermal-hardware` folder.
+The current browser suite runs 19 checks, including touch selection, zoomed panning, unplugging from the diagram, and reviewing older Python records. To use Chrome on Windows, set `$env:PITHERMAL_BROWSER_CHANNEL = "chrome"` before running it. To test a separate local simulator, set `PITHERMAL_TEST_URL` to its printed address. `npm --prefix tests run test:circuit` runs the 11 wiring and diagram-interaction checks alone.
+
+The simulator Python tests start their own temporary probe. For a nonstandard hardware checkout, set `PITHERMAL_TEST_HARDWARE` to its path. To run the companion project's Python tests, run the same unittest command from the `pithermal-hardware` folder.
 
 **Phase 1 result on Windows: 9/9 passed in Edge and 9/9 in Chrome.** The checks click the drawing at independently specified positions, compare the two visible rings against the expected terminal coordinates, and check the inspector text. They also cover the resistor lead, keyboard selection, zoomed wire picking on a narrow screen, and loading with external requests blocked.
 

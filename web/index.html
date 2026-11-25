@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#18292c">
+  <meta name="theme-color" content="#172d30">
   <meta name="color-scheme" content="light">
-  <title>Circuit workbench · PiThermal</title>
+  <title>Temperature workbench · PiThermal</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="./workbench.css">
   <script type="module" src="./workbench.js"></script>
@@ -14,25 +14,63 @@
 <body>
   <header class="app-bar">
     <div class="bar-inner">
-      <div class="brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>PiThermal</div>
+      <a class="brand" href="#top"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>PiThermal</a>
       <span class="app-name">Simulator</span>
-      <span class="local"><span aria-hidden="true" class="local-icon"></span>Local workspace</span>
+      <nav aria-label="Workbench sections">
+        <a href="#live-probe" data-live hidden>Probe</a>
+        <a href="#circuit">Circuit</a>
+        <a href="#python-log" data-live hidden>Python log <span aria-hidden="true">↓</span></a>
+      </nav>
     </div>
   </header>
-  <main>
-    <h1>Circuit workbench</h1>
-    <p class="intro">Select a wire or the resistor to trace its endpoints and inspect the connection.</p>
-    <div class="workbench">
-      <section class="diagram card" aria-labelledby="diagram-title">
+
+  <main id="top">
+    <div class="page-heading">
+      <h1>Temperature workbench</h1>
+      <p>Select a wire or component to inspect the circuit.</p>
+    </div>
+
+    <section class="instrument panel" id="live-probe" aria-labelledby="probe-title" data-live hidden>
+      <div class="readout">
+        <h2 id="probe-title">Simulated DS18B20</h2>
+        <output id="target-temperature" for="temperature-slider">—</output>
+      </div>
+      <div class="range-control">
+        <div class="control-label">
+          <label for="temperature-slider">Temperature</label><span id="slider-step">0.25°C steps</span>
+        </div>
+        <input id="temperature-slider" type="range" min="-55" max="125" step="0.25" value="25" aria-describedby="slider-step" disabled>
+        <div class="scale-ends"><span>−55°C</span><span>125°C</span></div>
+      </div>
+      <div class="adjustment">
+        <div class="control-label"><span id="adjust-label">Adjustment</span><span id="thermal-rate">0.5°C/s</span></div>
+        <div class="thermal-controls" role="group" aria-labelledby="adjust-label" aria-describedby="thermal-rate">
+          <button type="button" data-mode="warm" aria-label="Warm probe" aria-pressed="false" disabled><i aria-hidden="true">↑</i>Warm</button>
+          <button type="button" data-mode="cool" aria-label="Cool probe" aria-pressed="false" disabled><i aria-hidden="true">↓</i>Cool</button>
+          <button type="button" data-mode="hold" aria-pressed="false" disabled><i aria-hidden="true">Ⅱ</i>Hold</button>
+        </div>
+      </div>
+      <div class="connection-control">
+        <span id="probe-state" role="status">Connecting…</span>
+        <button type="button" id="probe-connection" disabled>Disconnect probe</button>
+      </div>
+      <p id="probe-error" role="alert" hidden></p>
+    </section>
+
+    <section class="diagram panel" id="circuit" aria-labelledby="diagram-title">
+      <div class="drawing">
         <div class="panel-bar">
-          <h2 id="diagram-title">Wiring diagram</h2>
-          <div class="zoom" role="group" aria-label="Diagram zoom">
-            <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
-            <button type="button" id="fit" title="Fit entire circuit" aria-label="Fit entire circuit">Fit</button>
-            <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
+          <h2 id="diagram-title">Circuit diagram</h2>
+          <div class="zoom-controls">
+            <span id="pan-hint" hidden>Drag to pan</span>
+            <div class="zoom" role="group" aria-label="Diagram zoom">
+              <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
+              <button type="button" id="fit" title="Fit entire circuit" aria-label="Fit entire circuit">Fit</button>
+              <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
+            </div>
           </div>
         </div>
-        <div class="viewport" id="viewport" tabindex="0" role="region" aria-label="Circuit diagram. Use the connection buttons below for keyboard selection.">
+        <div class="viewport" id="viewport" tabindex="0" role="region" aria-label="Interactive circuit. Use the wire buttons or the component selector for keyboard inspection.">
           <div class="scene" id="scene">
             <canvas id="board" aria-label="Raspberry Pi 4 connected to a DS18B20 on a breadboard, with power, ground, 1-Wire data and a 4.7 kilohm pull-up."></canvas>
             <span class="end-marker" id="end-a" aria-hidden="true"><b>A</b></span>
@@ -40,64 +78,53 @@
           </div>
         </div>
         <div class="connections">
-          <h3 id="connections-title">Connections</h3>
+          <h3 id="connections-title">Wires</h3>
           <div class="wire-list" id="wire-list" role="group" aria-labelledby="connections-title"></div>
         </div>
-      </section>
-      <div class="bench-side">
-        <section class="live-probe card" id="live-probe" aria-labelledby="probe-title" hidden>
-          <div class="panel-bar">
-            <h2 id="probe-title">Simulated DS18B20</h2>
-            <span id="probe-state" role="status">Connecting…</span>
+      </div>
+
+      <aside class="inspector" aria-labelledby="inspector-title">
+        <div class="panel-bar">
+          <h2 id="inspector-title">Inspector</h2>
+          <select id="component-picker" aria-label="Inspect a component">
+            <option value="">Components</option>
+          </select>
+        </div>
+        <div class="details">
+          <div class="selection" aria-live="polite" aria-atomic="true">
+            <div class="kind"><span id="wire-swatch" aria-hidden="true"></span><span id="wire-type"></span></div>
+            <h3 id="wire-name"></h3>
+            <p id="wire-purpose"></p>
           </div>
-          <div class="probe-controls">
-            <div class="temperature-control">
-              <label for="temperature-slider">Temperature</label>
-              <output id="target-temperature" for="temperature-slider">—</output>
-            </div>
-            <input id="temperature-slider" type="range" min="-55" max="125" step="0.25" value="25"
-                   aria-describedby="slider-step" disabled>
-            <div class="scale-ends"><span>−55°C</span><span id="slider-step">0.25°C steps</span><span>125°C</span></div>
-            <div class="thermal-controls" role="group" aria-label="Temperature adjustment" aria-describedby="thermal-rate">
-              <button type="button" data-mode="warm" aria-pressed="false" disabled>Warm probe</button>
-              <button type="button" data-mode="cool" aria-pressed="false" disabled>Cool probe</button>
-              <button type="button" data-mode="hold" aria-pressed="false" disabled>Hold</button>
-            </div>
-            <p id="thermal-rate">Warm and cool by 0.5°C each second.</p>
-            <div class="file-reading">
-              <div class="file-heading">
-                Virtual sensor file
-                <button type="button" id="probe-connection" disabled>Disconnect probe</button>
-              </div>
-              <code id="sensor-file"></code>
-              <div><output id="raw-temperature">—</output> <span id="raw-unit">millidegrees Celsius</span></div>
-            </div>
-            <p id="probe-error" role="alert" hidden></p>
-          </div>
-          <div class="terminal">
-            <div class="terminal-bar">
-              <h3 id="output-title">Python output</h3>
-              <div class="process-state"><span id="monitor-pid"></span><span id="monitor-status" role="status">Connecting…</span></div>
-            </div>
-            <pre id="monitor-output" role="log" aria-live="off" aria-labelledby="output-title" tabindex="0"></pre>
-          </div>
-        </section>
-        <aside class="inspector card" aria-labelledby="inspector-title">
-        <div class="panel-bar"><h2 id="inspector-title">Connection inspector</h2></div>
-        <div class="details" aria-live="polite" aria-atomic="true">
-          <div class="type"><span id="wire-swatch"></span><span id="wire-type"></span></div>
-          <h3 id="wire-name"></h3>
-          <ol class="terminals" aria-label="Selected endpoints">
+          <ol class="terminals" id="wire-terminals" aria-label="Selected endpoints">
             <li><span class="letter" aria-hidden="true">A</span><div><strong id="source-name"></strong><small id="source-detail"></small></div></li>
             <li><span class="letter" aria-hidden="true">B</span><div><strong id="target-name"></strong><small id="target-detail"></small></div></li>
           </ol>
-          <h4>Purpose</h4>
-          <p id="wire-purpose"></p>
+          <div class="part-tools" id="part-tools" hidden>
+            <div id="probe-socket" hidden>
+              <button type="button" id="circuit-probe-action" data-live hidden disabled>Unplug from circuit</button>
+            </div>
+            <h4 id="trace-label">Trace a connection</h4>
+            <div class="trace-list" id="part-wires" role="group" aria-labelledby="trace-label"></div>
+          </div>
         </div>
-        </aside>
+      </aside>
+    </section>
+
+    <section class="monitor panel" id="python-log" aria-labelledby="output-title" data-live hidden>
+      <div class="log-bar">
+        <div class="log-title"><span class="terminal-icon" aria-hidden="true">›_</span><h2 id="output-title">Python output</h2></div>
+        <div class="process-state"><span id="monitor-status" role="status">Connecting…</span><span id="monitor-pid"></span></div>
+        <button type="button" id="jump-latest" aria-label="Jump to latest Python output" disabled>Latest <span aria-hidden="true">↓</span></button>
       </div>
-    </div>
-    <noscript>Enable JavaScript to draw the circuit and select its connections.</noscript>
+      <div class="log-columns" aria-hidden="true"><span>Time</span><span>Reading</span><span>Status / message</span></div>
+      <pre id="monitor-output" role="log" aria-live="off" aria-labelledby="output-title" tabindex="0"></pre>
+      <div class="file-reading">
+        <strong>Virtual sensor file</strong><code id="sensor-file"></code>
+        <span class="file-value"><output id="raw-temperature">—</output> <span id="raw-unit">millidegrees Celsius</span></span>
+      </div>
+    </section>
+    <noscript>Enable JavaScript to use the circuit workbench.</noscript>
   </main>
 </body>
 </html>

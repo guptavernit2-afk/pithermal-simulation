@@ -4,7 +4,7 @@ const { dirname } = require("node:path");
 const { before, after, test } = require("node:test");
 const { chromium } = require("playwright-core");
 
-const address = "http://127.0.0.1:8765/";
+const address = new URL("/", process.env.PITHERMAL_TEST_URL || "http://127.0.0.1:8765/").href;
 const channel = process.env.PITHERMAL_BROWSER_CHANNEL ||
   (process.platform === "win32" ? "msedge" : "chrome");
 let browser;
@@ -81,6 +81,8 @@ for (const [value, raw, status] of [[27.5, "27500", "NORMAL"], [30, "30000", "NO
       document.querySelector("#raw-temperature").value === expected, raw, { timeout: 5000 });
     assert.equal((await readFile(sensorFile, "ascii")).trim(), raw);
     const line = await waitForSample(value, status);
+    const latestStatus = page.locator(`#monitor-output .log-row:last-child .log-${status.toLowerCase()}`);
+    assert.equal(await latestStatus.textContent(), status);
     assert.equal(await page.locator("#monitor-status").innerText(), "Running");
     t.diagnostic(`file ${raw} | stdout ${line}`);
   });
@@ -155,4 +157,59 @@ test("disconnect removes the probe and the same Python process recovers after re
   assert.equal(await monitorPid.innerText(), pid);
   assert.equal(await page.locator("#monitor-status").innerText(), "Running");
   t.diagnostic(`${pid} throughout | stdout ${before} → ${failure} → ${recovered} → ${next}`);
+});
+
+test("the probe and empty socket on the drawing operate the live Python sensor", async () => {
+  await moveSlider(26.5);
+  const before = await waitForSample(26.5, "NORMAL");
+  const pid = await page.locator("#monitor-pid").innerText();
+  const board = page.locator("#board");
+  async function pickProbe() {
+    await page.locator("#viewport").scrollIntoViewIfNeeded();
+    const box = await board.boundingBox();
+    await board.click({ position: { x: box.width * .785, y: box.height * 237 / 490 } });
+    assert.equal(await page.locator("#component-picker").inputValue(), "probe");
+  }
+  await pickProbe();
+  await page.getByRole("button", { name: "Unplug from circuit" }).click();
+  await waitForLine("SENSOR ERROR  No DS18B20 found");
+  await assert.rejects(stat(dirname(sensorFile)), { code: "ENOENT" });
+  assert.equal(await slider.isDisabled(), true);
+  assert.match(await page.locator("#wire-purpose").innerText(), /unplugged/);
+  await page.getByRole("button", { name: "Power feed", exact: true }).click();
+  await pickProbe(); // Re-select the empty socket, then reinsert the probe.
+  await page.getByRole("button", { name: "Insert into circuit" }).click();
+  assert.notEqual(await waitForSample(26.5, "NORMAL"), before);
+  assert.equal((await readFile(sensorFile, "ascii")).trim(), "26500");
+  assert.equal(await page.locator("#monitor-pid").innerText(), pid);
+});
+
+test("the full-width Python log works on desktop and mobile and can resume following", async () => {
+  for (const width of [1366, 390, 320]) {
+    await page.setViewportSize({ width, height: 850 });
+    const log = await page.locator("#python-log").boundingBox();
+    const circuit = await page.locator("#circuit").boundingBox();
+    const controls = await page.locator("#live-probe").boundingBox();
+    assert.ok(controls.y + controls.height <= circuit.y && circuit.y + circuit.height <= log.y);
+    assert.equal(Math.round(log.width), Math.round(circuit.width));
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  }
+  await page.getByRole("link", { name: "Python log" }).click();
+  const log = page.locator("#monitor-output");
+  const jump = page.getByRole("button", { name: "Jump to latest Python output" });
+  await log.evaluate(el => { el.scrollTop = 0; });
+  await page.waitForFunction(() => !document.querySelector("#jump-latest").disabled);
+  const last = await log.locator(".log-row").last().textContent();
+  await page.waitForFunction(previous => document.querySelector("#monitor-output .log-row:last-child").textContent !== previous,
+    last, { timeout: 8000 });
+  assert.ok(await log.evaluate(el => el.scrollTop < 2));
+  await jump.click();
+  await page.waitForFunction(() => document.querySelector("#jump-latest").disabled);
+  for (const width of [1366, 320]) {
+    await page.setViewportSize({ width, height: 850 });
+    await page.waitForFunction(() => {
+      const output = document.querySelector("#monitor-output");
+      return output.scrollTop + output.clientHeight >= output.scrollHeight - 4;
+    }, null, { timeout: 4000 });
+  }
 });

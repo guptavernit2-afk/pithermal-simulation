@@ -1,6 +1,6 @@
 // Original canvas artwork. Pin and hole positions come from the same layout
 // used by the jumper endpoints, so the drawing stays aligned at every zoom.
-import { gpio, hole, rail, SIZE, wires } from "../wiring.js";
+import { components, gpio, hole, rail, SIZE, wires } from "../wiring.js";
 
 const mono = 'Consolas, "Liberation Mono", monospace';
 const sans = '"Segoe UI", system-ui, sans-serif';
@@ -181,10 +181,10 @@ function jumperPath(wire) {
 
 const paths = new Map(wires.map(wire => [wire.id, jumperPath(wire)]));
 
-function drawJumper(ctx, wire, selected) {
+function drawJumper(ctx, wire, selected, hovered = false) {
   const path = paths.get(wire.id);
-  ctx.lineWidth = selected ? 9 : 7;
-  ctx.strokeStyle = selected ? "#f9fcf3" : "#182a2cd9";
+  ctx.lineWidth = selected || hovered ? 9 : 7;
+  ctx.strokeStyle = selected ? "#f9fcf3" : hovered ? "#c5e9de" : "#182a2cd9";
   ctx.stroke(path);
   ctx.lineWidth = selected ? 5 : 4;
   ctx.strokeStyle = wire.color;
@@ -196,7 +196,19 @@ function drawJumper(ctx, wire, selected) {
   if (wire.id === "pull-up") drawResistor(ctx);
 }
 
-export function drawCircuit(ctx, selected, probeConnected) {
+function outline(ctx, bounds, color) {
+  const [x, y, width, height] = bounds;
+  ctx.save();
+  ctx.setLineDash([6, 5]);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.roundRect(x - 3, y - 3, width + 6, height + 6, 7);
+  ctx.stroke();
+  ctx.restore();
+}
+
+export function drawCircuit(ctx, selected, probeConnected, hovered) {
   ctx.clearRect(0, 0, SIZE.width, SIZE.height);
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
@@ -207,11 +219,18 @@ export function drawCircuit(ctx, selected, probeConnected) {
     const [x, y] = selected.probePin;
     box(ctx, x - 6, y - 5, 12, selected.to.point[1] - y + 10, 5, "#78998c66");
   }
-  if (probeConnected) drawProbe(ctx);
-  for (const wire of wires) {
-    if (wire !== selected) drawJumper(ctx, wire, false);
+  if (probeConnected) {
+    drawProbe(ctx);
+  } else {
+    outline(ctx, [755, 225, 70, 49], "#687771");
+    label(ctx, "SOCKET", 765, 253, 13, "#374c49", mono, 650);
   }
-  drawJumper(ctx, selected, true);
+  for (const wire of wires) {
+    if (wire !== selected) drawJumper(ctx, wire, false, wire === hovered);
+  }
+  if (selected.from) drawJumper(ctx, selected, true);
+  if (hovered?.bounds && hovered !== selected) outline(ctx, hovered.bounds, "#a3c3b3");
+  if (selected.bounds) outline(ctx, selected.bounds, "#efb942");
   label(ctx, "3.3 V", 165, 60, 14, "#ffc1a8");
   label(ctx, "GND", 245, 87, 14, "#bad8ff");
   label(ctx, "GPIO4", 327, 113, 14, "#f9da84");
@@ -223,19 +242,29 @@ export function drawCircuit(ctx, selected, probeConnected) {
 }
 
 const pick = document.createElement("canvas").getContext("2d");
-export function wireAt(x, y, tolerance, selected) {
+export function itemAt(x, y, tolerance, selected, probeConnected) {
   const r = resistorBody;
   if (x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height) {
     return wires.find(wire => wire.id === "pull-up");
   }
-  // Use the visible stroke first; expand the target only when the click missed.
-  // This keeps neighboring pins and crossing wires individually selectable.
-  const frontToBack = [selected, ...wires.filter(wire => wire !== selected).reverse()];
+  // A drawn conductor or a pin takes priority over the wider touch target.
+  const frontToBack = wires.filter(wire => wire !== selected).reverse();
+  if (selected.from) frontToBack.unshift(selected);
   pick.lineCap = "round";
-  for (const width of [7, tolerance]) {
-    pick.lineWidth = width;
-    const hit = frontToBack.find(wire => pick.isPointInStroke(paths.get(wire.id), x, y));
-    if (hit) return hit;
+  const underPointer = wire => pick.isPointInStroke(paths.get(wire.id), x, y);
+  pick.lineWidth = 7;
+  const exact = frontToBack.find(underPointer);
+  if (exact) return exact;
+  if (probeConnected) {
+    const pin = wires.find(wire => wire.probePin &&
+      Math.hypot(x - wire.probePin[0], y - wire.probePin[1]) <= 7);
+    if (pin) return pin;
   }
-  return null;
+  const part = components.find(component => {
+    const [left, top, width, height] = component.bounds;
+    return x >= left && x <= left + width && y >= top && y <= top + height;
+  });
+  if (part?.id === "probe") return part;
+  pick.lineWidth = tolerance;
+  return frontToBack.find(underPointer) || part;
 }

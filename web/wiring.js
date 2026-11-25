@@ -15,6 +15,27 @@ export function hole(letter, row) {
   return [530 + 20 * (row - 1), index < 5 ? 220 + index * 17 : 318 + (index - 5) * 17];
 }
 
+// The probe sits inside the breadboard's bounds. Keep it first when picking
+// overlapping parts. Bounds use the same 1000 × 490 coordinates as the drawing.
+export const components = [
+  {
+    id: "probe", name: "DS18B20 probe", type: "Temperature sensor", color: "#3a7668",
+    bounds: [750, 222, 80, 100], wires: ["probe-ground", "data", "probe-supply"],
+    purpose: "The probe sends each temperature reading through DQ at F14. Its other legs connect to ground at F13 and 3.3 V at F15.",
+    emptyPurpose: "The probe is unplugged. F13–F15 are empty. Inserting the probe restores the same sensor so Python can read it again.",
+  },
+  {
+    id: "pi", name: "Raspberry Pi 4B", type: "Single-board computer", color: "#659573",
+    bounds: [35, 164, 391, 239], wires: ["power-feed", "ground-feed", "data"],
+    purpose: "The Pi supplies 3.3 V and reads the probe on GPIO4. On hardware, Linux exposes each reading as a file for the Python monitor.",
+  },
+  {
+    id: "breadboard", name: "Breadboard", type: "Solderless prototyping board", color: "#c5ad79",
+    bounds: [490, 136, 471, 273], wires: ["probe-supply", "probe-ground", "data", "pull-up"],
+    purpose: "The long rails distribute power and ground. In each numbered column, holes F through J share a metal strip that joins the probe legs to the jumpers.",
+  },
+];
+
 export const wires = [
   {
     id: "power-feed", name: "Power feed", type: "Supply jumper", color: "#ff806b",

@@ -1,15 +1,17 @@
 import { setProbeConnected } from "./workbench.js";
 
-const panel = document.getElementById("live-probe");
+const liveElements = document.querySelectorAll("[data-live]");
 const slider = document.getElementById("temperature-slider");
 const target = document.getElementById("target-temperature");
 const modeButtons = document.querySelectorAll(".thermal-controls button");
 const connection = document.getElementById("probe-connection");
+const circuitAction = document.getElementById("circuit-probe-action");
 const probeState = document.getElementById("probe-state");
 const file = document.getElementById("sensor-file");
 const raw = document.getElementById("raw-temperature");
 const unit = document.getElementById("raw-unit");
 const terminal = document.getElementById("monitor-output");
+const jumpLatest = document.getElementById("jump-latest");
 const pid = document.getElementById("monitor-pid");
 const status = document.getElementById("monitor-status");
 const error = document.getElementById("probe-error");
@@ -89,14 +91,76 @@ slider.addEventListener("input", () => {
 for (const button of modeButtons) {
   button.addEventListener("click", () => send("/api/mode", { mode: button.dataset.mode }));
 }
-connection.addEventListener("click", () => {
-  if (latest) send("/api/connection", { connected: !latest.connected });
-});
+for (const button of [connection, circuitAction]) {
+  button.addEventListener("click", () => {
+    if (latest) send("/api/connection", { connected: !latest.connected });
+  });
+}
 
 function enableControls() {
   connection.disabled = !online || latest?.exitCode !== null;
+  circuitAction.disabled = connection.disabled;
   slider.disabled = connection.disabled || !latest?.connected;
   for (const button of modeButtons) button.disabled = slider.disabled;
+}
+
+function atLatest() {
+  return terminal.scrollTop + terminal.clientHeight >= terminal.scrollHeight - 4;
+}
+
+let following = true;
+let logWidth = terminal.clientWidth;
+function updateJumpButton() {
+  jumpLatest.disabled = atLatest();
+}
+terminal.addEventListener("scroll", () => {
+  // A width change can wrap old error messages and shift the scroll position.
+  // Keep the user's follow setting until the resize has finished.
+  if (terminal.clientWidth === logWidth) following = atLatest();
+  updateJumpButton();
+}, { passive: true });
+jumpLatest.addEventListener("click", () => {
+  following = true;
+  terminal.scrollTop = terminal.scrollHeight;
+  updateJumpButton();
+});
+new ResizeObserver(() => {
+  logWidth = terminal.clientWidth;
+  if (following) terminal.scrollTop = terminal.scrollHeight;
+  updateJumpButton();
+}).observe(terminal);
+
+function token(className, text) {
+  const span = document.createElement("span");
+  span.className = className;
+  span.textContent = text;
+  return span;
+}
+
+function displayLines(lines) {
+  if (terminal.textContent === lines.join("\n")) return;
+  const fragment = document.createDocumentFragment();
+  for (const [index, line] of lines.entries()) {
+    if (index) fragment.append("\n");
+    const row = document.createElement("span");
+    row.className = "log-row";
+    fragment.append(row);
+    const timed = /^(\d{2}:\d{2}:\d{2}  )(.*)$/.exec(line);
+    if (!timed) {
+      row.append(token("log-banner", line));
+      continue;
+    }
+    row.append(token("log-time", timed[1]));
+    const reading = /^(.*  )(NORMAL|WARNING)$/.exec(timed[2]);
+    if (reading) {
+      row.append(token("log-reading", reading[1]), token(reading[2] === "NORMAL" ? "log-normal" : "log-warning", reading[2]));
+    } else {
+      row.append(token(timed[2].startsWith("SENSOR ERROR") ? "log-message log-error" : "log-message", timed[2]));
+    }
+  }
+  terminal.replaceChildren(fragment);
+  if (following) terminal.scrollTop = terminal.scrollHeight;
+  updateJumpButton();
 }
 
 function display(snapshot) {
@@ -111,6 +175,7 @@ function display(snapshot) {
     probeState.dataset.connected = String(snapshot.connected);
     setProbeConnected(snapshot.connected);
     connection.textContent = snapshot.connected ? "Disconnect probe" : "Reconnect probe";
+    circuitAction.textContent = snapshot.connected ? "Unplug from circuit" : "Insert into circuit";
   }
   for (const button of modeButtons) {
     button.setAttribute("aria-pressed", String(snapshot.connected && button.dataset.mode === snapshot.mode));
@@ -118,14 +183,10 @@ function display(snapshot) {
   enableControls();
   syncSlider();
   showError();
-  const output = snapshot.lines.join("\n");
-  if (terminal.textContent !== output) {
-    const follow = terminal.scrollTop + terminal.clientHeight >= terminal.scrollHeight - 4;
-    terminal.textContent = output;
-    if (follow) terminal.scrollTop = terminal.scrollHeight;
-  }
+  displayLines(snapshot.lines);
   pid.textContent = `PID ${snapshot.monitorPid}`;
   const monitorState = snapshot.exitCode === null ? "Running" : `Exited (${snapshot.exitCode})`;
+  status.dataset.running = String(snapshot.exitCode === null);
   if (status.textContent !== monitorState) status.textContent = monitorState;
 }
 
@@ -133,7 +194,7 @@ async function connect() {
   // Keep the original static-only circuit usable without a monitor backend.
   const page = await fetch(location.pathname, { method: "HEAD", cache: "no-store" });
   if (page.headers.get("X-PiThermal-Monitor") !== "1") return;
-  panel.hidden = false;
+  for (const element of liveElements) element.hidden = false;
   const events = new EventSource("/api/events");
   events.onopen = () => { acceptedRevision = -1; };
   events.onmessage = event => display(JSON.parse(event.data));
@@ -142,11 +203,12 @@ async function connect() {
     enableControls();
     probeState.textContent = "Unknown";
     delete probeState.dataset.connected;
+    delete status.dataset.running;
     status.textContent = "Reconnecting…";
   };
 }
 
 connect().catch(() => {
-  panel.hidden = false;
+  for (const element of liveElements) element.hidden = false;
   status.textContent = "Service unavailable";
 });

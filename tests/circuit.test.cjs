@@ -3,7 +3,7 @@ const { before, after, test } = require("node:test");
 const { chromium } = require("playwright-core");
 
 // Start the README's local server first. Browser tooling is test-only.
-const address = "http://127.0.0.1:8765/";
+const address = new URL("/", process.env.PITHERMAL_TEST_URL || "http://127.0.0.1:8765/").href;
 const channel = process.env.PITHERMAL_BROWSER_CHANNEL ||
   (process.platform === "win32" ? "msedge" : "chrome");
 const view = { width: 1366, height: 900 };
@@ -13,7 +13,7 @@ const problems = [];
 
 before(async () => {
   browser = await chromium.launch({ channel });
-  page = await browser.newPage({ viewport: view, serviceWorkers: "block" });
+  page = await browser.newPage({ viewport: view, hasTouch: true, serviceWorkers: "block" });
   page.on("pageerror", error => problems.push(error.message));
   page.on("response", response => {
     if (response.status() >= 400) problems.push(`${response.status()} ${response.url()}`);
@@ -51,6 +51,7 @@ function screenPoint(canvas, [x, y]) {
 }
 
 async function clickWire(point) {
+  await page.locator("#viewport").scrollIntoViewIfNeeded();
   const canvas = await page.locator("#board").boundingBox();
   const pixel = screenPoint(canvas, point);
   await page.mouse.click(pixel.x, pixel.y);
@@ -106,6 +107,53 @@ test("zoomed wire picking and both markers stay aligned on a narrow screen", asy
   assert.equal(await viewport.evaluate(element => element.scrollLeft), 0);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await checkSelection(expected[3]);
+});
+
+test("parts and probe pins are selectable on the drawing and by keyboard", async () => {
+  await page.setViewportSize(view);
+  const picker = page.getByRole("combobox", { name: "Inspect a component" });
+  for (const [point, id, name] of [[[160, 274], "pi", "Raspberry Pi 4B"],
+                                   [[605, 250], "breadboard", "Breadboard"],
+                                   [[785, 237], "probe", "DS18B20 probe"]]) {
+    await clickWire(point);
+    assert.equal(await picker.inputValue(), id);
+    assert.equal(await page.locator("#wire-name").innerText(), name);
+    assert.equal(await page.locator(".end-marker:visible").count(), 0);
+  }
+  await picker.focus();
+  await picker.press("End");
+  assert.equal(await page.locator("#wire-name").innerText(), "Breadboard");
+  const trace = page.getByRole("button", { name: "Trace Pull-up resistor" });
+  await trace.focus();
+  await trace.press("Enter");
+  await checkSelection(expected[5]);
+  assert.equal(await picker.inputValue(), "");
+  await clickWire([770, 318]); // Ground leg at F13.
+  await checkSelection(expected[4]);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator("#viewport").scrollIntoViewIfNeeded();
+  const finger = screenPoint(await page.locator("#board").boundingBox(), [790, 318]);
+  await page.touchscreen.tap(finger.x, finger.y); // DQ at F14 is close to the pull-up lead.
+  await checkSelection(expected[2]);
+});
+
+test("dragging a zoomed circuit pans without changing the inspected item", async () => {
+  await page.setViewportSize(view);
+  await page.getByRole("button", { name: "1-Wire data", exact: true }).click();
+  await page.getByRole("button", { name: "Zoom in" }).click();
+  const viewport = page.locator("#viewport");
+  await viewport.scrollIntoViewIfNeeded();
+  const box = await viewport.boundingBox();
+  const x = box.x + box.width * .65;
+  const y = box.y + box.height * .65;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x - 95, y - 65, { steps: 8 });
+  await page.mouse.up();
+  assert.ok(await viewport.evaluate(element => element.scrollLeft >= 90 && element.scrollTop >= 60));
+  assert.equal(await page.locator("#wire-name").innerText(), "1-Wire data");
+  await page.getByRole("button", { name: "Fit entire circuit" }).click();
+  assert.deepEqual(await viewport.evaluate(element => [element.scrollLeft, element.scrollTop]), [0, 0]);
 });
 
 test("all circuit assets load locally without browser errors", () => {
