@@ -196,7 +196,7 @@ function drawJumper(ctx, wire, selected) {
   if (wire.id === "pull-up") drawResistor(ctx);
 }
 
-export function drawCircuit(ctx, selected) {
+export function drawCircuit(ctx, selected, probeConnected) {
   ctx.clearRect(0, 0, SIZE.width, SIZE.height);
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
@@ -207,7 +207,7 @@ export function drawCircuit(ctx, selected) {
     const [x, y] = selected.probePin;
     box(ctx, x - 6, y - 5, 12, selected.to.point[1] - y + 10, 5, "#78998c66");
   }
-  drawProbe(ctx);
+  if (probeConnected) drawProbe(ctx);
   for (const wire of wires) {
     if (wire !== selected) drawJumper(ctx, wire, false);
   }
@@ -215,11 +215,11 @@ export function drawCircuit(ctx, selected) {
   label(ctx, "3.3 V", 165, 60, 14, "#ffc1a8");
   label(ctx, "GND", 245, 87, 14, "#bad8ff");
   label(ctx, "GPIO4", 327, 113, 14, "#f9da84");
-  label(ctx, "DS18B20   +   4.7 kΩ", 708, 121, 15, "#e0e9e2");
+  label(ctx, probeConnected ? "DS18B20   +   4.7 kΩ" : "Probe removed   ·   4.7 kΩ", 708, 121, 15, "#e0e9e2");
   label(ctx, "Raspberry Pi 4 Model B", 39, 438, 21, "#eff5ef", sans, 600);
   label(ctx, "40-pin GPIO header", 40, 461, 15, "#b2c7c2");
   label(ctx, "Solderless breadboard", 494, 438, 21, "#eff5ef", sans, 600);
-  label(ctx, "DS18B20 pins at F13–F15", 495, 461, 15, "#b2c7c2");
+  label(ctx, probeConnected ? "DS18B20 pins at F13–F15" : "Empty probe contacts at F13–F15", 495, 461, 15, "#b2c7c2");
 }
 
 const pick = document.createElement("canvas").getContext("2d");

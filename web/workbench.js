@@ -3,13 +3,23 @@ import { SIZE, wires } from "./wiring.js";
 
 const byId = id => document.getElementById(id);
 const canvas = byId("board");
+const wiredDescription = canvas.getAttribute("aria-label");
 const ctx = canvas.getContext("2d");
 const scene = byId("scene");
 const viewport = byId("viewport");
 const buttons = new Map();
 const zoomLevels = [1, 1.5, 2, 3];
 let zoomIndex = 0;
+let probeConnected = true;
 let selected = wires.find(wire => wire.id === "data");
+
+export function setProbeConnected(connected) {
+  if (probeConnected === connected) return;
+  probeConnected = connected;
+  canvas.setAttribute("aria-label", connected ? wiredDescription :
+    "Raspberry Pi 4 and breadboard with the DS18B20 removed. Probe contacts F13 through F15 are empty.");
+  redraw();
+}
 
 function redraw() {
   const bounds = canvas.getBoundingClientRect();
@@ -22,7 +32,7 @@ function redraw() {
     canvas.height = height;
   }
   ctx.setTransform(width / SIZE.width, 0, 0, height / SIZE.height, 0, 0);
-  drawCircuit(ctx, selected);
+  drawCircuit(ctx, selected, probeConnected);
 }
 
 function showEndpoint(markerId, field, terminal) {

@@ -8,15 +8,21 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from .runtime import running_probe
+from .runtime import ProbeDisconnected, running_probe
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def millidegrees(body):
+def field(body, name):
     payload = json.loads(body, parse_float=Decimal)
-    value = payload.get("celsius") if isinstance(payload, dict) else None
+    if not isinstance(payload, dict) or name not in payload:
+        raise ValueError(f"Expected a JSON object with {name}")
+    return payload[name]
+
+
+def millidegrees(body):
+    value = field(body, "celsius")
     if type(value) not in (int, Decimal) or not -55 <= value <= 125:
         raise ValueError("Expected a temperature from -55 to 125 °C")
     value = Decimal(value)
@@ -44,7 +50,8 @@ class WorkbenchHandler(SimpleHTTPRequestHandler):
         return False
 
     def do_POST(self):
-        if urlsplit(self.path).path != "/api/temperature":
+        path = urlsplit(self.path).path
+        if path not in ("/api/temperature", "/api/mode", "/api/connection"):
             self.send_error(404)
             return
         if not self.local_api_request():
@@ -55,13 +62,21 @@ class WorkbenchHandler(SimpleHTTPRequestHandler):
         try:
             size = int(self.headers.get("Content-Length", "0"))
             if not 0 < size <= 128:
-                raise ValueError("Invalid temperature request size")
-            value = millidegrees(self.rfile.read(size))
+                raise ValueError("Invalid request size")
+            body = self.rfile.read(size)
+            probe = self.server.probe
+            if path == "/api/temperature":
+                revision = probe.set_millidegrees(millidegrees(body))
+            elif path == "/api/mode":
+                revision = probe.set_mode(field(body, "mode"))
+            else:
+                revision = probe.set_connected(field(body, "connected"))
         except (ValueError, DecimalException):
-            self.send_error(400, "Invalid temperature")
+            self.send_error(400, "Invalid probe control")
             return
-        try:
-            revision = self.server.probe.set_millidegrees(value)
+        except ProbeDisconnected:
+            self.send_error(409, "Probe is disconnected")
+            return
         except (OSError, RuntimeError):
             self.send_error(503, "Could not update virtual probe")
             return

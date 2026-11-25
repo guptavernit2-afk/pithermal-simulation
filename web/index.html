@@ -46,7 +46,10 @@
       </section>
       <div class="bench-side">
         <section class="live-probe card" id="live-probe" aria-labelledby="probe-title" hidden>
-          <div class="panel-bar"><h2 id="probe-title">Simulated DS18B20</h2></div>
+          <div class="panel-bar">
+            <h2 id="probe-title">Simulated DS18B20</h2>
+            <span id="probe-state" role="status">Connecting…</span>
+          </div>
           <div class="probe-controls">
             <div class="temperature-control">
               <label for="temperature-slider">Temperature</label>
@@ -55,17 +58,26 @@
             <input id="temperature-slider" type="range" min="-55" max="125" step="0.25" value="25"
                    aria-describedby="slider-step" disabled>
             <div class="scale-ends"><span>−55°C</span><span id="slider-step">0.25°C steps</span><span>125°C</span></div>
+            <div class="thermal-controls" role="group" aria-label="Temperature adjustment" aria-describedby="thermal-rate">
+              <button type="button" data-mode="warm" aria-pressed="false" disabled>Warm probe</button>
+              <button type="button" data-mode="cool" aria-pressed="false" disabled>Cool probe</button>
+              <button type="button" data-mode="hold" aria-pressed="false" disabled>Hold</button>
+            </div>
+            <p id="thermal-rate">Warm and cool by 0.5°C each second.</p>
             <div class="file-reading">
-              <div class="file-heading">Virtual sensor file</div>
+              <div class="file-heading">
+                Virtual sensor file
+                <button type="button" id="probe-connection" disabled>Disconnect probe</button>
+              </div>
               <code id="sensor-file"></code>
-              <div><output id="raw-temperature">—</output> <span>millidegrees Celsius</span></div>
+              <div><output id="raw-temperature">—</output> <span id="raw-unit">millidegrees Celsius</span></div>
             </div>
             <p id="probe-error" role="alert" hidden></p>
           </div>
           <div class="terminal">
             <div class="terminal-bar">
               <h3 id="output-title">Python output</h3>
-              <span id="monitor-status" role="status">Connecting…</span>
+              <div class="process-state"><span id="monitor-pid"></span><span id="monitor-status" role="status">Connecting…</span></div>
             </div>
             <pre id="monitor-output" role="log" aria-live="off" aria-labelledby="output-title" tabindex="0"></pre>
           </div>
