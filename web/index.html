@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#18292c">
+  <meta name="color-scheme" content="light">
+  <title>Circuit workbench · PiThermal</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./workbench.css">
+  <script type="module" src="./workbench.js"></script>
+</head>
+<body>
+  <header class="app-bar">
+    <div class="bar-inner">
+      <div class="brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>PiThermal</div>
+      <span class="app-name">Simulator</span>
+      <span class="local"><span aria-hidden="true" class="local-icon"></span>Local workspace</span>
+    </div>
+  </header>
+  <main>
+    <h1>Circuit workbench</h1>
+    <p class="intro">Select a wire or the resistor to trace its endpoints and inspect the connection.</p>
+    <div class="workbench">
+      <section class="diagram card" aria-labelledby="diagram-title">
+        <div class="panel-bar">
+          <h2 id="diagram-title">Wiring diagram</h2>
+          <div class="zoom" role="group" aria-label="Diagram zoom">
+            <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
+            <button type="button" id="fit" title="Fit entire circuit" aria-label="Fit entire circuit">Fit</button>
+            <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
+          </div>
+        </div>
+        <div class="viewport" id="viewport" tabindex="0" role="region" aria-label="Circuit diagram. Use the connection buttons below for keyboard selection.">
+          <div class="scene" id="scene">
+            <canvas id="board" aria-label="Raspberry Pi 4 connected to a DS18B20 on a breadboard, with power, ground, 1-Wire data and a 4.7 kilohm pull-up."></canvas>
+            <span class="end-marker" id="end-a" aria-hidden="true"><b>A</b></span>
+            <span class="end-marker" id="end-b" aria-hidden="true"><b>B</b></span>
+          </div>
+        </div>
+        <div class="connections">
+          <h3 id="connections-title">Connections</h3>
+          <div class="wire-list" id="wire-list" role="group" aria-labelledby="connections-title"></div>
+        </div>
+      </section>
+      <aside class="inspector card" aria-labelledby="inspector-title">
+        <div class="panel-bar"><h2 id="inspector-title">Connection inspector</h2></div>
+        <div class="details" aria-live="polite" aria-atomic="true">
+          <div class="type"><span id="wire-swatch"></span><span id="wire-type"></span></div>
+          <h3 id="wire-name"></h3>
+          <ol class="terminals" aria-label="Selected endpoints">
+            <li><span class="letter" aria-hidden="true">A</span><div><strong id="source-name"></strong><small id="source-detail"></small></div></li>
+            <li><span class="letter" aria-hidden="true">B</span><div><strong id="target-name"></strong><small id="target-detail"></small></div></li>
+          </ol>
+          <h4>Purpose</h4>
+          <p id="wire-purpose"></p>
+        </div>
+      </aside>
+    </div>
+    <noscript>Enable JavaScript to draw the circuit and select its connections.</noscript>
+  </main>
+</body>
+</html>
