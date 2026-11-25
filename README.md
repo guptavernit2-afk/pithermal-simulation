@@ -2,31 +2,37 @@
 
 An offline classroom simulator for **Operating Systems CCA · Project 13 · Raspberry Pi Temperature Monitoring System**. Trace the Pi 4B circuit, warm or unplug the virtual DS18B20, and watch the hardware project's Python monitor read its sensor file.
 
-**Phase 3 is ready for review.** The workbench demonstrates a temperature warning, cooling back to normal, and recovery after unplugging the probe. All three use the Python monitor from the [companion hardware repository](https://github.com/guptavernit2-afk/pithermal-hardware).
+**Phase 4 is ready for review.** Two offline runs from fresh checkouts verified the complete classroom demo, including warning recovery and a probe reconnect in the same Python process. [Offline verification results](#phase-4-offline-verification)
+
+## Prepare the laptop while online
+
+The presenter needs **Python 3.8 or later** and a web browser such as Edge or Chrome. The demo runs on a laptop using Python's standard library. The simulator supplies the virtual sensor, and the hardware checkout supplies the monitor that reads it.
+
+Open a terminal in an empty parent folder. With Git installed, this one line gets both repositories in PowerShell 7, Command Prompt, macOS or Linux. In Windows PowerShell 5.1, run the two `git clone` commands on separate lines.
+
+```sh
+git clone https://github.com/guptavernit2-afk/pithermal-simulation.git && git clone https://github.com/guptavernit2-afk/pithermal-hardware.git
+```
+
+For a classroom laptop that is already offline, copy both prepared folders onto it side by side. Keep the folder names `pithermal-simulation` and `pithermal-hardware`. Only the automated browser checks need Node.js and an npm dependency. [Test setup](#reproduce-the-checks)
 
 ## Run the circuit workbench
 
-Use Python 3.8 or later and a modern browser. For first-time setup, clone both repositories into the same parent folder:
+1. To demonstrate offline operation, switch off Wi-Fi and unplug Ethernet if connected. The workbench uses the laptop's loopback address.
+2. Open a terminal in `pithermal-simulation`, or enter `cd pithermal-simulation` from the parent folder. Start the entire demo with one command. Use `python3` if that is your Python 3 command.
 
-```sh
-git clone https://github.com/guptavernit2-afk/pithermal-simulation.git
-git clone https://github.com/guptavernit2-afk/pithermal-hardware.git
-cd pithermal-simulation
-```
+   ```sh
+   python -m simulator
+   ```
 
-If both checkouts are already on the laptop, start here. From the simulation repo root:
+3. Open the address printed in the terminal and keep the terminal open. The launcher also prints the sensor file path and the Python monitor's process ID (PID). The workbench starts at **25°C**, the virtual file reads **25000**, and Python prints `25.000 °C  NORMAL`. [Open the default local workbench](http://127.0.0.1:8765/)
 
-```sh
-python -m simulator
-```
-
-Open [the local workbench](http://127.0.0.1:8765/). Use `python3` if that is your Python 3 command. After cloning, the simulator runs offline with the Python standard library. It creates one temporary probe at 25°C and starts one monitor process. Ctrl+C stops the service and its child process and removes the temporary device directory.
+### Workbench controls
 
 - **Change temperature.** Drag the slider or use the arrow keys for exact 0.25°C steps. **Virtual sensor file** shows the raw contents in millidegrees. Hover over the filename for its full path, also printed by the launcher.
 - **Warm, cool or hold.** **Warm probe** adds 0.5°C each second. **Cool probe** subtracts 0.5°C each second. Choose **Hold** to keep the current value. Moving the slider or reaching −55°C or 125°C also stops the adjustment. The local service sets this classroom demonstration rate.
 - **Unplug and reconnect.** Choose **Disconnect probe**. The diagram shows empty contacts at F13–F15, the device disappears from the virtual bus, and temperature controls pause. Wait for Python to print `SENSOR ERROR`, then choose **Reconnect probe**. The same probe returns at its last temperature in Hold. The PID beside **Python output** identifies the monitor throughout the run.
 - **Read the terminal.** **Python output** shows up to 60 recent lines captured from the companion process. The file changes as you move the slider. The monitor prints its next reading on its own two-second interval and warns only above 30°C.
-- **Troubleshooting.** For a differently named hardware checkout, run `python -m simulator --hardware-dir "../path to checkout"`. If the port is busy, stop the previous server or use `--port 8766` and open the URL the launcher prints. The earlier `python -m http.server 8765 --bind 127.0.0.1 --directory web` command still serves the standalone wiring diagram.
 
 Click a wire on the diagram, or Tab to its connection button and press Enter or Space. Try **1-Wire data** followed by **Pull-up resistor**. Both reach the DQ strip, but their other ends and purposes differ. Use **+** to enlarge the board, scroll to inspect its holes, and choose **Fit** to restore the whole drawing.
 
@@ -40,11 +46,35 @@ Run the rows in order. Give Python time to print a new line before moving to the
 | --- | --- |
 | Select the data wire | Both endpoints light up. Labels identify the probe's DQ pin and the Pi's GPIO4. |
 | Set the slider to 27.5°C | The sensor file contains `27500`. On its next sample Python prints `27.500 °C  NORMAL` with a timestamp. |
-| Set exactly 30°C, then 31.25°C | With the default 30°C threshold, Python first prints `NORMAL`, then `31.250 °C  WARNING`. |
+| Set exactly 30°C, wait for a reading, then set 31.25°C | With the default 30°C threshold, Python first prints `30.000 °C  NORMAL`, then `31.250 °C  WARNING`. |
 | Set 29.5°C, wait for a reading, then press **Warm probe** | Python starts at `NORMAL`. Let it sample a temperature above 30°C and print `WARNING`. |
 | Press **Cool probe**, then **Hold** when the warning clears | The file value falls every second. Python prints `NORMAL` on its first sample at or below 30°C. |
-| Press **Disconnect probe** and wait for a sample | The probe disappears from the drawing and the file viewer says **File absent**. Python prints `SENSOR ERROR  No DS18B20 found`. |
-| Press **Reconnect probe** | The file reappears at the same path. The next sample shows the restored temperature. Compare the PID before and after reconnecting. |
+| Set 27.5°C, wait for `NORMAL`, then press **Disconnect probe** | The probe disappears from the drawing and the file viewer says **File absent**. Wait for Python to print `SENSOR ERROR  No DS18B20 found`. |
+| Press **Reconnect probe**, wait for 27.5°C, then move the slider to 28.25°C | The same file returns. Python first prints `27.500 °C  NORMAL`, then `28.250 °C  NORMAL`. The monitor PID stays the same. |
+
+To run the demo a second time from the beginning, press **Ctrl+C** in the launch terminal and wait for `Simulator stopped.` Start `python -m simulator` again and reopen the printed address. The new session has a fresh temporary directory, a new monitor and the original 25°C reading. Refreshing the browser during a run reopens the current session.
+
+### Troubleshooting during the demo
+
+| What you see | What to do |
+| --- | --- |
+| The launcher asks for the hardware checkout | Put both repos in the same parent folder, or supply the actual path with `python -m simulator --hardware-dir "../path to checkout"`. |
+| The launcher reports that the port is in use | For the classroom demo, run `python -m simulator --port 8766` and open its printed URL. The automated browser checks use port 8765. |
+| Only the wiring diagram appears | The static server serves the diagram alone. Start `python -m simulator` from the simulation repo and open the address it prints to get the live probe controls. |
+| The file changed but Python still shows the previous reading | Wait for the next timestamp. The monitor samples every two seconds. Exactly 30°C is `NORMAL`. |
+
+## Phase 4 offline verification
+
+The two runs used fresh GitHub clones of the reviewed simulator and hardware monitor. Each ran in its own Debian 13 container with read-only checkouts, Python 3.13.5 and a fresh headless Chromium 156 browser profile. Docker's `--network none` left only the loopback interface for the browser and Python. In each container, an external connection attempt returned `Network is unreachable` and the system listed zero physical DS18B20 probes. [Simulator revision a25d4cb](https://github.com/guptavernit2-afk/pithermal-simulation/tree/a25d4cbaa8b232a51c101698992116c6dd97da32) · [Hardware revision 7493bf9](https://github.com/guptavernit2-afk/pithermal-hardware/tree/7493bf956623e0b35fc6f2a0a41b89893939c6cd)
+
+| Run | Temporary session directory under `/tmp` | Python on warming → cooling | Python after reconnect → slider change | Browser checks |
+| --- | --- | --- | --- | --- |
+| 1 | `pithermal-pq832t4a` | `31.000 °C  WARNING` → `29.500 °C  NORMAL` | `27.500 °C  NORMAL` → `28.250 °C  NORMAL` | 15/15 passed |
+| 2 | `pithermal-uimzuev9` | `31.000 °C  WARNING` → `29.500 °C  NORMAL` | `27.500 °C  NORMAL` → `28.250 °C  NORMAL` | 15/15 passed |
+
+In both runs the sensor started at `25000` millidegrees and Python printed `25.000 °C  NORMAL`. The browser checks verified both ends of all six connections. At 27.5°C, 30°C and 31.25°C the file on disk contained `27500`, `30000` and `31250`. Python reported `NORMAL`, `NORMAL` and `WARNING` in that order.
+
+Unplugging the probe removed its directory from the virtual bus and produced `SENSOR ERROR`. The monitor kept its PID across reconnect in each run. After the stop signal, the process exited, the temporary directory was gone and port 8765 was free. All **7 simulator Python tests** and **13 hardware-project Python tests** also passed offline.
 
 ## Circuit wiring
 
@@ -63,15 +93,20 @@ The pin map and sensor connections follow the component datasheets. Voltage meas
 
 ## Reproduce the checks
 
-Keep `python -m simulator` running on its default port. The browser tests operate the controls in this local session. Use Node.js 20 or later and an installed Edge (Windows default) or Chrome (macOS/Linux default). In a second terminal at the simulation repository root:
+To automate the walkthrough, prepare **Node.js 20 or later** and an installed Edge (Windows default) or Chrome (macOS/Linux default). While still online, install the locked test dependency once from the simulation repository root.
 
 ```sh
 npm --prefix tests ci
+```
+
+After disconnecting, start `python -m simulator` on its default port. In a second terminal in the simulation repo, run the following checks. To repeat the browser demo, stop the launcher, start it again, and rerun the npm test command.
+
+```sh
 npm --prefix tests test
 python -B -m unittest discover -s tests -v
 ```
 
-The npm installation is a one-time step for automated browser tests. To use Chrome on Windows, set `$env:PITHERMAL_BROWSER_CHANNEL = "chrome"` before running them. `npm --prefix tests run test:circuit` runs just the nine wiring checks. The Python tests start a separate temporary probe and verify cleanup. If testing with a nonstandard companion path, set `PITHERMAL_TEST_HARDWARE` to that checkout for the Python tests.
+The npm test command operates the controls in the live workbench. To use Chrome on Windows, set `$env:PITHERMAL_BROWSER_CHANNEL = "chrome"` before running it. `npm --prefix tests run test:circuit` runs the nine wiring checks alone. The simulator Python tests start their own temporary probe. For a nonstandard hardware checkout, set `PITHERMAL_TEST_HARDWARE` to its path. To run the companion project's Python tests, run the same unittest command from the `pithermal-hardware` folder.
 
 **Phase 1 result on Windows: 9/9 passed in Edge and 9/9 in Chrome.** The checks click the drawing at independently specified positions, compare the two visible rings against the expected terminal coordinates, and check the inspector text. They also cover the resistor lead, keyboard selection, zoomed wire picking on a narrow screen, and loading with external requests blocked.
 
@@ -96,8 +131,6 @@ Disconnecting at 27.5°C removed the device directory and produced `SENSOR ERROR
 
 On a real Pi, the **Linux 1-Wire driver** supplies the file. In this demo, the **local service** supplies it. The monitor exercises the same file-reading interface in both cases. The diagram and file viewer make that OS boundary visible during the viva.
 
-The companion checkout used for verification was [hardware revision 7493bf9](https://github.com/guptavernit2-afk/pithermal-hardware/tree/7493bf956623e0b35fc6f2a0a41b89893939c6cd).
-
 ## Repository structure
 
 ```text
@@ -118,7 +151,7 @@ The circuit geometry lives in [wiring.js](web/wiring.js) and its drawing in [boa
 | --- | --- | --- |
 | **1 · Interactive circuit** | Reviewed local circuit workbench and connection inspector. | Verified all six pairs of terminals, their purposes, keyboard selection, zoom alignment and local asset loading. |
 | **2 · Sensor-to-terminal path** | Reviewed slider, virtual file and Python terminal. | Verified the three requested temperatures, stream reconnection, startup and shutdown. |
-| **3 · Demonstration controls** | Warm, cool, hold, and disconnect/reconnect, ready for review. | Verified a warning cleared during cooling and the same Python process recovered after the probe returned. |
-| **4 · Offline verification and handoff** | Finish one-command setup instructions, troubleshooting, and the classroom walkthrough. | From fresh checkouts, complete setup, disconnect from the network, launch the simulator, run the demo twice, and record results for the report. |
+| **3 · Demonstration controls** | Reviewed warm, cool, hold, and disconnect/reconnect controls. | Verified a warning cleared during cooling and the same Python process recovered after the probe returned. |
+| **4 · Offline verification and handoff** | Laptop setup, one-command launch, troubleshooting and classroom walkthrough ready for review. | Completed two offline demos from fresh checkouts and verified the sensor, Python output and cleanup in each. |
 
-For each phase, implement the agreed scope, run its acceptance checks and earlier automated tests, record actual results, then commit and push for team review. The initial README commit establishes the plan. Simulator results will be added as each phase is verified.
+The team reviews each phase against the recorded checks before moving on.
