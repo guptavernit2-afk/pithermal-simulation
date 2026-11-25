@@ -54,9 +54,14 @@ class ProbeSession:
         _replace(pending, self.file)
         self.millidegrees = value
 
-    def _require_probe(self):
+    def _require_monitor(self):
         if self.closed:
             raise RuntimeError("The simulation has stopped")
+        if self.exit_code is not None:
+            raise RuntimeError("The Python monitor has exited")
+
+    def _require_probe(self):
+        self._require_monitor()
         if not self.connected:
             raise ProbeDisconnected("Reconnect the probe to change its temperature")
 
@@ -84,8 +89,7 @@ class ProbeSession:
         if type(connected) is not bool:
             raise ValueError("Expected a boolean connection state")
         with self.changed:
-            if self.closed:
-                raise RuntimeError("The simulation has stopped")
+            self._require_monitor()
             if self.connected != connected:
                 # Move the complete probe out of or back onto the bus in one
                 # rename. Its ID and last reading survive the disconnection.
@@ -134,6 +138,7 @@ class ProbeSession:
         code = process.wait()
         with self.changed:
             self.exit_code = code
+            self.mode = "hold"
             self._notify()
 
     def next_snapshot(self, previous):

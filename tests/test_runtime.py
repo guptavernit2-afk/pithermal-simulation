@@ -1,11 +1,13 @@
 import os
+import signal
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from simulator.__main__ import millidegrees
+from simulator.__main__ import ThreadingHTTPServer, main, millidegrees
 from simulator.runtime import ProbeDisconnected, running_probe
 
 
@@ -40,6 +42,50 @@ class RuntimeTests(unittest.TestCase):
             self.assertIsNone(process.poll())
         self.assertIsNotNone(process.poll())
         self.assertFalse(directory.exists())
+
+    def test_monitor_exit_stops_warming_and_rejects_further_controls(self):
+        with running_probe(HARDWARE) as (session, process):
+            self.wait_for_output(session, "25.000 °C  NORMAL")
+            with session.changed:
+                session.set_mode("warm")
+                process.terminate()
+                self.assertTrue(session.changed.wait_for(lambda: session.exit_code is not None, 5))
+                raw = session.file.read_text()
+                self.assertEqual(session.mode, "hold")
+                self.assertEqual(session.exit_code, process.returncode)
+                self.assertFalse(session.changed.wait_for(lambda: session.file.read_text() != raw, 1.2))
+            with self.assertRaises(RuntimeError):
+                session.set_mode("warm")
+            with self.assertRaises(RuntimeError):
+                session.set_millidegrees(30000)
+            with self.assertRaises(RuntimeError):
+                session.set_connected(False)
+            self.assertTrue(session.connected)
+            self.assertEqual(session.file.read_text(), raw)
+
+    def test_sigterm_stops_live_monitor_and_removes_virtual_bus(self):
+        sessions = []
+
+        def stop_server(server):
+            self.assertFalse(sessions, "The server continued accepting requests after SIGTERM")
+            sessions.append(server.probe)
+            self.assertTrue(server.probe.file.is_file())
+            signal.raise_signal(signal.SIGTERM)
+
+        def unhandled_signal(signum, frame):
+            self.fail("The server did not install a SIGTERM handler")
+
+        previous = signal.signal(signal.SIGTERM, unhandled_signal)
+        self.addCleanup(signal.signal, signal.SIGTERM, previous)
+        arguments = ["simulator", "--hardware-dir", str(HARDWARE), "--port", "0"]
+        with patch.object(sys, "argv", arguments), patch("builtins.print"), \
+                patch.object(ThreadingHTTPServer, "handle_request", stop_server):
+            main()
+        session, = sessions
+        self.assertTrue(session.closed)
+        self.assertIsNotNone(session.exit_code)
+        self.assertFalse(session.devices_dir.parent.exists())
+        self.assertIs(signal.getsignal(signal.SIGTERM), unhandled_signal)
 
     def test_gradual_adjustments_stop_at_both_sensor_limits(self):
         with running_probe(HARDWARE) as (session, _):

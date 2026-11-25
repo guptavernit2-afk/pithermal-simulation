@@ -29,11 +29,12 @@
       <h1>Temperature workbench</h1>
       <p>Select a wire or component to inspect the circuit.</p>
     </div>
+    <p class="static-notice" id="static-notice" hidden><strong>Circuit diagram only.</strong> To use the live probe and Python log, run <code>python -m simulator</code> from the simulator folder and open the address it prints.</p>
 
     <section class="instrument panel" id="live-probe" aria-labelledby="probe-title" data-live hidden>
       <div class="readout">
         <h2 id="probe-title">Simulated DS18B20</h2>
-        <output id="target-temperature" for="temperature-slider">—</output>
+        <output id="target-temperature" for="temperature-slider" aria-live="off">—</output>
       </div>
       <div class="range-control">
         <div class="control-label">
@@ -120,8 +121,11 @@
       <div class="log-columns" aria-hidden="true"><span>Time</span><span>Reading</span><span>Status / message</span></div>
       <pre id="monitor-output" role="log" aria-live="off" aria-labelledby="output-title" tabindex="0"></pre>
       <div class="file-reading">
-        <strong>Virtual sensor file</strong><code id="sensor-file"></code>
-        <span class="file-value"><output id="raw-temperature">—</output> <span id="raw-unit">millidegrees Celsius</span></span>
+        <details class="file-location">
+          <summary><strong>Virtual sensor file</strong> <code id="sensor-file"></code></summary>
+          <code id="sensor-full-path"></code>
+        </details>
+        <span class="file-value"><output id="raw-temperature" aria-live="off">—</output> <span id="raw-unit">millidegrees Celsius</span></span>
       </div>
     </section>
     <noscript>Enable JavaScript to use the circuit workbench.</noscript>

@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import signal
 from decimal import Decimal, DecimalException
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -120,18 +121,30 @@ def main():
         parser.error("--port must be between 0 and 65535")
 
     handler = partial(WorkbenchHandler, directory=str(ROOT / "web"))
+    stopping = False
+
+    def request_stop(signum, frame):
+        nonlocal stopping
+        stopping = True
+
+    previous_handler = signal.signal(signal.SIGTERM, request_stop)
     try:
         with ThreadingHTTPServer(("127.0.0.1", args.port), handler) as server:
+            server.timeout = 0.5
             with running_probe(hardware) as (probe, process):
                 server.probe = probe
                 print(f"Workbench: http://127.0.0.1:{server.server_port}/", flush=True)
                 print(f"Virtual sensor file: {probe.file}", flush=True)
                 print(f"Hardware monitor PID: {process.pid}", flush=True)
-                server.serve_forever()
+                while not stopping:
+                    server.handle_request()
     except KeyboardInterrupt:
-        print("Simulator stopped.")
+        pass
     except OSError as exc:
         parser.exit(1, f"Could not run the simulator: {exc}\n")
+    finally:
+        signal.signal(signal.SIGTERM, previous_handler)
+    print("Simulator stopped.")
 
 
 if __name__ == "__main__":

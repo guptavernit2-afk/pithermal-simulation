@@ -109,6 +109,18 @@ test("zoomed wire picking and both markers stay aligned on a narrow screen", asy
   await checkSelection(expected[3]);
 });
 
+test("a touch between parallel wires selects the nearest visible wire", async () => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.getByRole("button", { name: "1-Wire data", exact: true }).click();
+  await page.locator("#viewport").scrollIntoViewIfNeeded();
+  const canvas = await page.locator("#board").boundingBox();
+  for (const [point, wire] of [[[300, 75], expected[0]], [[300, 98], expected[1]]]) {
+    const finger = screenPoint(canvas, point);
+    await page.touchscreen.tap(finger.x, finger.y);
+    await checkSelection(wire);
+  }
+});
+
 test("parts and probe pins are selectable on the drawing and by keyboard", async () => {
   await page.setViewportSize(view);
   const picker = page.getByRole("combobox", { name: "Inspect a component" });
@@ -123,6 +135,8 @@ test("parts and probe pins are selectable on the drawing and by keyboard", async
   await picker.focus();
   await picker.press("End");
   assert.equal(await page.locator("#wire-name").innerText(), "Breadboard");
+  assert.deepEqual((await page.locator("#part-wires button").allTextContents()).sort(),
+    expected.map(wire => wire.name).sort());
   const trace = page.getByRole("button", { name: "Trace Pull-up resistor" });
   await trace.focus();
   await trace.press("Enter");

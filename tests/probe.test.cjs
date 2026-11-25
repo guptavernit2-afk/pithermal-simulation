@@ -126,8 +126,10 @@ test("disconnect removes the probe and the same Python process recovers after re
   const monitorPid = page.locator("#monitor-pid");
   const pid = await monitorPid.innerText();
   assert.match(pid, /^PID [1-9]\d*$/);
+  await page.getByRole("button", { name: "1-Wire data", exact: true }).click();
   await page.getByRole("button", { name: "Disconnect probe" }).click();
   await page.waitForFunction(() => document.querySelector("#raw-temperature").value === "File absent");
+  assert.match(await page.locator("#target-detail").textContent(), /empty socket/i);
   await assert.rejects(stat(dirname(sensorFile)), { code: "ENOENT" });
   assert.notDeepEqual(await probeBodyPixel(), fitted);
   assert.equal(await slider.isDisabled(), true);
@@ -145,8 +147,10 @@ test("disconnect removes the probe and the same Python process recovers after re
   await reconnect.waitFor();
   assert.equal(await page.locator("#probe-state").innerText(), "Disconnected");
   assert.equal(await monitorPid.innerText(), pid);
+  await page.getByRole("button", { name: "1-Wire data", exact: true }).click();
   await reconnect.click();
   await page.waitForFunction(() => document.querySelector("#raw-temperature").value === "27500");
+  assert.match(await page.locator("#target-detail").textContent(), /probe DQ/i);
   assert.equal(await page.locator("#sensor-file").getAttribute("title"), sensorFile);
   assert.equal((await readFile(sensorFile, "ascii")).trim(), "27500");
   assert.deepEqual(await probeBodyPixel(), fitted);
@@ -199,10 +203,16 @@ test("the full-width Python log works on desktop and mobile and can resume follo
   const jump = page.getByRole("button", { name: "Jump to latest Python output" });
   await log.evaluate(el => { el.scrollTop = 0; });
   await page.waitForFunction(() => !document.querySelector("#jump-latest").disabled);
+  const selectedRecord = await log.locator(".log-row").nth(2).evaluate(row => {
+    window.getSelection().selectAllChildren(row);
+    return window.getSelection().toString();
+  });
+  assert.ok(selectedRecord);
   const last = await log.locator(".log-row").last().textContent();
   await page.waitForFunction(previous => document.querySelector("#monitor-output .log-row:last-child").textContent !== previous,
     last, { timeout: 8000 });
   assert.ok(await log.evaluate(el => el.scrollTop < 2));
+  assert.equal(await page.evaluate(() => window.getSelection().toString()), selectedRecord);
   await jump.click();
   await page.waitForFunction(() => document.querySelector("#jump-latest").disabled);
   for (const width of [1366, 320]) {
@@ -211,5 +221,116 @@ test("the full-width Python log works on desktop and mobile and can resume follo
       const output = document.querySelector("#monitor-output");
       return output.scrollTop + output.clientHeight >= output.scrollHeight - 4;
     }, null, { timeout: 4000 });
+  }
+});
+
+for (const [stage, message] of [["backend detection", "Service unavailable · retrying…"], ["event stream", "Reconnecting…"]]) {
+  test(`a 503 during ${stage} recovers without refreshing`, async () => {
+    const viewer = await browser.newPage({ serviceWorkers: "block" });
+    let failOnce = true;
+    await viewer.route("**/*", route => {
+      const request = route.request();
+      if (!request.url().startsWith(address)) return route.abort();
+      const target = stage === "backend detection" ? request.method() === "HEAD" : request.url().endsWith("/api/events");
+      if (failOnce && target) {
+        failOnce = false;
+        return route.fulfill({ status: 503, body: "" });
+      }
+      return route.continue();
+    });
+    try {
+      await viewer.goto(address);
+      await viewer.getByText(message, { exact: true }).waitFor();
+      assert.equal(await viewer.locator("#static-notice").isHidden(), true);
+      assert.equal(await viewer.locator("#temperature-slider").isDisabled(), true);
+      await viewer.waitForFunction(() => !document.querySelector("#temperature-slider").disabled, null, { timeout: 8000 });
+      assert.equal(await viewer.locator("#monitor-status").textContent(), "Running");
+    } finally {
+      await viewer.close();
+    }
+  });
+}
+
+test("the readout keeps millidegree precision between slider steps", async () => {
+  for (const celsius of [30.001, -5.125]) {
+    const response = await page.request.post(new URL("/api/temperature", address).href, { data: { celsius } });
+    assert.equal(response.ok(), true);
+    await page.waitForFunction(expected => document.querySelector("#raw-temperature").value === expected,
+      String(Math.round(celsius * 1000)));
+    const label = `${celsius} °C`;
+    assert.equal(await page.locator("#target-temperature").textContent(), label);
+    assert.equal(await slider.getAttribute("aria-valuetext"), label);
+    await waitForSample(celsius, celsius > 30 ? "WARNING" : "NORMAL");
+  }
+});
+
+test("the full readout and file path fit a narrow screen with enlarged text", async () => {
+  const response = await page.request.post(new URL("/api/temperature", address).href, { data: { celsius: 124.875 } });
+  assert.equal(response.ok(), true);
+  await page.waitForFunction(() => document.querySelector("#target-temperature").value === "124.875 °C");
+  const summary = page.locator(".file-location summary");
+  await summary.focus();
+  await summary.press("Enter");
+  assert.equal(await page.locator("#sensor-full-path").innerText(), sensorFile);
+  try {
+    for (const width of [320, 561, 981, 1280]) {
+      await page.setViewportSize({ width, height: 850 });
+      for (const scale of ["100%", "200%"]) {
+        const fits = await page.evaluate(fontSize => {
+          document.documentElement.style.fontSize = fontSize;
+          const target = document.querySelector("#target-temperature");
+          const range = document.createRange();
+          range.selectNodeContents(target);
+          const text = range.getBoundingClientRect();
+          const box = target.getBoundingClientRect();
+          const path = document.querySelector("#sensor-full-path").getBoundingClientRect();
+          return text.left >= box.left - 1 && text.right <= box.right + 1 &&
+            path.right <= innerWidth && document.documentElement.scrollWidth <= innerWidth;
+        }, scale);
+        assert.ok(fits, `Contents fit at ${width}px and ${scale} text`);
+      }
+    }
+  } finally {
+    await page.evaluate(() => document.documentElement.style.removeProperty("font-size"));
+    await summary.press("Enter");
+  }
+});
+
+test("an interrupted stream clears live readings and restores them on reconnect", async () => {
+  const snapshot = await page.evaluate(() => new Promise(resolve => {
+    const events = new EventSource("/api/events");
+    events.onmessage = event => { events.close(); resolve(event.data); };
+  }));
+  const viewer = await browser.newPage({ serviceWorkers: "block" });
+  await viewer.route("**/*", route =>
+    route.request().url().startsWith(address) ? route.continue() : route.abort());
+  let resume;
+  const gate = new Promise(resolve => { resume = resolve; });
+  let first = true;
+  await viewer.route("**/api/events", async route => {
+    if (first) {
+      first = false;
+      // A valid SSE response ending after one snapshot exercises native reconnect.
+      await route.fulfill({ contentType: "text/event-stream", body: `retry: 100\ndata: ${snapshot}\n\n` });
+    } else {
+      await gate;
+      await route.continue().catch(() => {});
+    }
+  });
+  try {
+    await viewer.goto(address);
+    await viewer.waitForFunction(() => document.querySelector("#monitor-status").textContent === "Reconnecting…");
+    assert.equal(await viewer.locator("#temperature-slider").isDisabled(), true);
+    assert.equal(await viewer.locator("#target-temperature").textContent(), "—");
+    assert.equal(await viewer.locator("#raw-temperature").textContent(), "Unavailable");
+    assert.equal(await viewer.locator("#raw-unit").isHidden(), true);
+    assert.equal(await viewer.locator("#monitor-output").textContent(), JSON.parse(snapshot).lines.join("\n"));
+    resume();
+    await viewer.waitForFunction(() => !document.querySelector("#temperature-slider").disabled);
+    assert.equal(await viewer.locator("#monitor-status").textContent(), "Running");
+    assert.equal(await viewer.locator("#raw-temperature").textContent(), JSON.parse(snapshot).raw);
+  } finally {
+    resume();
+    await viewer.close();
   }
 });

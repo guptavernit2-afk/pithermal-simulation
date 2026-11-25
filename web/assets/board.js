@@ -266,5 +266,18 @@ export function itemAt(x, y, tolerance, selected, probeConnected) {
   });
   if (part?.id === "probe") return part;
   pick.lineWidth = tolerance;
-  return frontToBack.find(underPointer) || part;
+  const candidates = frontToBack.filter(underPointer);
+  if (candidates.length < 2) return candidates[0] || part;
+
+  // Several wires may fit under a fingertip. Narrow the native stroke hit
+  // area to the nearest path, preserving the drawing order for ties.
+  let miss = 7;
+  let hit = tolerance;
+  while (hit - miss > 0.5) {
+    pick.lineWidth = (hit + miss) / 2;
+    if (candidates.some(underPointer)) hit = pick.lineWidth;
+    else miss = pick.lineWidth;
+  }
+  pick.lineWidth = hit;
+  return candidates.find(underPointer);
 }

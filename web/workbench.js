@@ -23,6 +23,7 @@ export function setProbeConnected(connected) {
   canvas.setAttribute("aria-label", connected ? wiredDescription :
     "Raspberry Pi 4 and breadboard with the DS18B20 removed. Probe contacts F13 through F15 are empty.");
   if (selected.id === "probe") showPurpose();
+  if (selected.to?.socketPin) showEndpoint("end-b", "target", selected.to);
   redraw();
 }
 
@@ -45,7 +46,11 @@ function showEndpoint(markerId, field, terminal) {
   marker.style.left = `${100 * terminal.point[0] / SIZE.width}%`;
   marker.style.top = `${100 * terminal.point[1] / SIZE.height}%`;
   byId(`${field}-name`).textContent = terminal.name;
-  byId(`${field}-detail`).textContent = terminal.detail;
+  let detail = terminal.detail;
+  if (terminal.socketPin) {
+    detail += probeConnected ? ` (probe ${terminal.socketPin}).` : " (empty socket).";
+  }
+  byId(`${field}-detail`).textContent = detail;
 }
 
 function showPurpose() {

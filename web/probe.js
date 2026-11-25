@@ -8,6 +8,7 @@ const connection = document.getElementById("probe-connection");
 const circuitAction = document.getElementById("circuit-probe-action");
 const probeState = document.getElementById("probe-state");
 const file = document.getElementById("sensor-file");
+const fullPath = document.getElementById("sensor-full-path");
 const raw = document.getElementById("raw-temperature");
 const unit = document.getElementById("raw-unit");
 const terminal = document.getElementById("monitor-output");
@@ -16,33 +17,34 @@ const pid = document.getElementById("monitor-pid");
 const status = document.getElementById("monitor-status");
 const error = document.getElementById("probe-error");
 const commands = [];
-let writing = false;
+let activeWrite = null;
 let online = false;
 let acceptedRevision = -1;
 let latest = null;
 let requestError = "";
 
-function showTarget() {
-  target.value = `${Number(slider.value).toFixed(2)} °C`;
-  slider.setAttribute("aria-valuetext", target.value);
+function showTarget(celsius) {
+  target.value = celsius === null ? "—" : `${celsius.toFixed(3).replace(/(\.\d{2})0$/, "$1")} °C`;
+  slider.setAttribute("aria-valuetext", celsius === null ? "Unavailable" : target.value);
 }
 
 function syncSlider() {
-  if (writing || !latest || latest.revision < acceptedRevision) return;
-  if (latest.raw === null) {
-    target.value = "—";
-    slider.setAttribute("aria-valuetext", "Unavailable");
-    return;
-  }
+  if (activeWrite || !latest || latest.revision < acceptedRevision) return;
   const celsius = Number(latest.raw) / 1000;
-  if (Number.isFinite(celsius)) {
+  if (/^-?\d{1,6}$/.test(latest.raw) && celsius >= -55 && celsius <= 125) {
     slider.value = celsius;
-    showTarget();
+    // The file can contain millidegrees between the slider's quarter-degree steps.
+    showTarget(celsius);
+  } else {
+    showTarget(null);
   }
 }
 
 function showError() {
-  error.textContent = requestError || latest?.adjustmentError || "";
+  const message = latest && latest.exitCode !== null
+    ? "Python has stopped sampling. Restart the simulator from its launch terminal to resume."
+    : requestError || latest?.adjustmentError || "";
+  if (error.textContent !== message) error.textContent = message;
   error.hidden = !error.textContent;
 }
 
@@ -55,11 +57,12 @@ function send(path, payload) {
   } else {
     commands.push(command);
   }
-  if (!writing) void flushChanges();
+  if (!activeWrite) void flushChanges();
 }
 
 async function flushChanges() {
-  writing = true;
+  const controller = new AbortController();
+  activeWrite = controller;
   while (commands.length) {
     const { path, payload } = commands.shift();
     try {
@@ -67,7 +70,9 @@ async function flushChanges() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       });
+      if (controller.signal.aborted) return;
       if (response.ok) {
         acceptedRevision = Number(response.headers.get("X-Probe-Revision"));
         requestError = "";
@@ -76,16 +81,17 @@ async function flushChanges() {
           "Could not apply this control. Try again.";
       }
     } catch {
+      if (controller.signal.aborted) return;
       requestError = "Could not reach the simulator. Check its connection and try again.";
     }
     showError();
   }
-  writing = false;
+  activeWrite = null;
   syncSlider();
 }
 
 slider.addEventListener("input", () => {
-  showTarget();
+  showTarget(Number(slider.value));
   send("/api/temperature", { celsius: Number(slider.value) });
 });
 for (const button of modeButtons) {
@@ -137,10 +143,27 @@ function token(className, text) {
   return span;
 }
 
+let renderedLines = [];
 function displayLines(lines) {
-  if (terminal.textContent === lines.join("\n")) return;
+  // Each snapshot contains a rolling window. Retain the rows shared by both
+  // windows so reading, selecting and copying older output survives updates.
+  const first = renderedLines.findIndex((line, index) =>
+    line === lines[0] && renderedLines.slice(index).every((old, offset) => old === lines[offset]));
+  const retained = first < 0 ? 0 : renderedLines.length - first;
+  if (retained === renderedLines.length && retained === lines.length) return;
+  const anchor = !following && first > 0 ? terminal.children[first] : null;
+  const anchorTop = anchor?.getBoundingClientRect().top;
+  if (retained === 0) {
+    terminal.replaceChildren();
+  } else {
+    for (let index = 0; index < first; index++) {
+      terminal.firstChild.remove(); // old record
+      terminal.firstChild.remove(); // intervening newline
+    }
+  }
   const fragment = document.createDocumentFragment();
-  for (const [index, line] of lines.entries()) {
+  for (let index = retained; index < lines.length; index++) {
+    const line = lines[index];
     if (index) fragment.append("\n");
     const row = document.createElement("span");
     row.className = "log-row";
@@ -158,8 +181,10 @@ function displayLines(lines) {
       row.append(token(timed[2].startsWith("SENSOR ERROR") ? "log-message log-error" : "log-message", timed[2]));
     }
   }
-  terminal.replaceChildren(fragment);
+  terminal.append(fragment);
+  renderedLines = lines;
   if (following) terminal.scrollTop = terminal.scrollHeight;
+  else if (anchor) terminal.scrollTop += anchor.getBoundingClientRect().top - anchorTop;
   updateJumpButton();
 }
 
@@ -170,6 +195,7 @@ function display(snapshot) {
   unit.hidden = snapshot.raw === null;
   file.textContent = snapshot.file.split(/[\\/]/).slice(-2).join("/");
   file.title = snapshot.file;
+  fullPath.textContent = snapshot.file;
   if (probeState.dataset.connected !== String(snapshot.connected)) {
     probeState.textContent = snapshot.connected ? "Connected" : "Disconnected";
     probeState.dataset.connected = String(snapshot.connected);
@@ -190,25 +216,51 @@ function display(snapshot) {
   if (status.textContent !== monitorState) status.textContent = monitorState;
 }
 
+function serviceUnavailable(message) {
+  activeWrite?.abort();
+  activeWrite = null;
+  commands.length = 0;
+  latest = null;
+  online = false;
+  acceptedRevision = -1;
+  requestError = "";
+  enableControls();
+  showTarget(null);
+  showError();
+  probeState.textContent = "Unknown";
+  delete probeState.dataset.connected;
+  raw.value = "Unavailable";
+  unit.hidden = true;
+  for (const button of modeButtons) button.setAttribute("aria-pressed", "false");
+  pid.textContent = "";
+  delete status.dataset.running;
+  status.textContent = message;
+}
+
 async function connect() {
   // Keep the original static-only circuit usable without a monitor backend.
-  const page = await fetch(location.pathname, { method: "HEAD", cache: "no-store" });
-  if (page.headers.get("X-PiThermal-Monitor") !== "1") return;
+  try {
+    const page = await fetch(location.pathname, { method: "HEAD", cache: "no-store" });
+    if (!page.ok) throw new Error("Cannot reach the workbench");
+    if (page.headers.get("X-PiThermal-Monitor") !== "1") {
+      for (const element of liveElements) element.hidden = true;
+      document.getElementById("static-notice").hidden = false;
+      return;
+    }
+  } catch {
+    for (const element of liveElements) element.hidden = false;
+    serviceUnavailable("Service unavailable · retrying…");
+    setTimeout(connect, 3000);
+    return;
+  }
   for (const element of liveElements) element.hidden = false;
   const events = new EventSource("/api/events");
-  events.onopen = () => { acceptedRevision = -1; };
   events.onmessage = event => display(JSON.parse(event.data));
   events.onerror = () => {
-    online = false;
-    enableControls();
-    probeState.textContent = "Unknown";
-    delete probeState.dataset.connected;
-    delete status.dataset.running;
-    status.textContent = "Reconnecting…";
+    serviceUnavailable("Reconnecting…");
+    // A closed stream (for example an HTTP 503) no longer retries itself.
+    if (events.readyState === EventSource.CLOSED) setTimeout(connect, 3000);
   };
 }
 
-connect().catch(() => {
-  for (const element of liveElements) element.hidden = false;
-  status.textContent = "Service unavailable";
-});
+void connect();

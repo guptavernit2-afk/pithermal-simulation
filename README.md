@@ -2,7 +2,7 @@
 
 An offline classroom simulator for **Operating Systems CCA · Project 13 · Raspberry Pi Temperature Monitoring System**. Trace the Pi 4B circuit, warm or unplug the virtual DS18B20, and watch the hardware project's Python monitor read its sensor file.
 
-**Phase 4 is ready for review.** Two offline runs from fresh checkouts verified the complete classroom demo, including warning recovery and a probe reconnect in the same Python process. [Offline verification results](#phase-4-offline-verification)
+**The laptop demo is ready.** The circuit, virtual sensor and live Python monitor have passed the classroom walkthrough. [Pre-deployment review](#pre-deployment-review) · [Two offline runs](#phase-4-offline-verification)
 
 ## Prepare the laptop while online
 
@@ -29,7 +29,7 @@ For a classroom laptop that is already offline, copy both prepared folders onto 
 
 ### Workbench controls
 
-- **Change temperature.** Use the probe controls above the diagram. Drag the slider or use the arrow keys for exact 0.25°C steps. **Virtual sensor file** under the Python log shows the raw value in millidegrees. Hover over its name for the full path, also printed by the launcher.
+- **Change temperature.** Use the probe controls above the diagram. Drag the slider or use the arrow keys for exact 0.25°C steps. **Virtual sensor file** under the Python log shows the raw value in millidegrees. Expand its name to see or copy the full path, also printed by the launcher.
 - **Warm, cool or hold.** **Warm** adds 0.5°C each second. **Cool** subtracts 0.5°C each second. Choose **Hold** to keep the current value. Moving the slider or reaching −55°C or 125°C also stops the adjustment. The local service sets this classroom demonstration rate.
 - **Unplug and reconnect.** Select the DS18B20 on the diagram, then choose **Unplug from circuit** in the inspector. The socket at F13–F15 becomes empty and Python prints `SENSOR ERROR`. Select the empty socket and choose **Insert into circuit** to resume at the last temperature. The probe controls at the top also have **Disconnect probe** and **Reconnect probe** buttons for these actions.
 - **Read the records.** Choose **Python log** in the top navigation. The full-width **Python output** panel groups the monitor's actual output by time, reading and status. It keeps up to 60 lines. Scroll back to read earlier samples and choose **Latest** to follow new ones again. The monitor samples every two seconds and warns only above 30°C.
@@ -62,6 +62,21 @@ To run the demo a second time from the beginning, press **Ctrl+C** in the launch
 | The launcher reports that the port is in use | For the classroom demo, run `python -m simulator --port 8766` and open its printed URL. The automated browser checks default to port 8765. |
 | Only the wiring diagram appears | The static server serves the diagram alone. Start `python -m simulator` from the simulation repo and open the address it prints to get the live probe controls. |
 | The file changed but Python still shows the previous reading | Wait for the next timestamp. The monitor samples every two seconds. Exactly 30°C is `NORMAL`. |
+| The log says **Reconnecting…** | Leave the tab open. The controls pause and the last Python records remain available. Current readings return when the stream reconnects. |
+| The log says **Exited** | The Python monitor has stopped. Press Ctrl+C in the launch terminal and run `python -m simulator` again to start a fresh session. |
+
+## Pre-deployment review
+
+The Windows laptop review passed **25 browser checks in Edge and 25 in Chrome**, each against its own simulator with the real Python monitor and no physical sensor. All **9 simulator Python tests** and **13 companion-project Python tests** passed. A separate static-server check verified the diagram-only launch instructions. Each browser tab connected to the same simulator sees and controls the same probe.
+
+| Reviewed area | Verified behavior |
+| --- | --- |
+| Circuit and inspector | All six connections highlight their endpoints. A tap between nearby wires selects the closest one. The breadboard lists both supply rails, and unplugging the sensor identifies its empty socket. |
+| Sensor file and real Python monitor | At 30°C Python prints `NORMAL`. At 30.001°C the workbench shows the exact reading and Python prints `WARNING`. Cooling clears the warning. After unplugging and reconnecting, the same Python process resumes sampling. |
+| Interrupted sessions | Losing the live stream clears current readings and preserves log history. Temporary service errors recover without a page refresh. If the monitor process exits, warming and cooling stop and controls are disabled. |
+| Interface | The temperature display and full file path fit at 320 CSS pixels with enlarged text. Earlier log records can be selected and copied while new readings arrive. Keyboard users can inspect wires, components and the file path. |
+
+**Public hosting still needs a deployment test.** Uploading `web/` to a static host gives visitors the interactive circuit diagram. A live deployment also needs the Python service, the companion hardware checkout and a connection that supports server-sent events. The launcher currently binds to loopback and accepts local API requests. A public release needs an explicit hosting and access configuration, and a decision about whether visitors share the presenter's probe or get separate sessions.
 
 ## Phase 4 offline verification
 
@@ -106,7 +121,7 @@ npm --prefix tests test
 python -B -m unittest discover -s tests -v
 ```
 
-The current browser suite runs 19 checks, including touch selection, zoomed panning, unplugging from the diagram, and reviewing older Python records. To use Chrome on Windows, set `$env:PITHERMAL_BROWSER_CHANNEL = "chrome"` before running it. To test a separate local simulator, set `PITHERMAL_TEST_URL` to its printed address. `npm --prefix tests run test:circuit` runs the 11 wiring and diagram-interaction checks alone.
+The browser suite covers touch selection, zoomed panning, unplugging from the diagram, precision at the warning threshold, stream interruption, log selection and narrow screens with enlarged text. To use Chrome on Windows, set `$env:PITHERMAL_BROWSER_CHANNEL = "chrome"` before running it. To test a separate local simulator, set `PITHERMAL_TEST_URL` to its printed address. `npm --prefix tests run test:circuit` runs the wiring and diagram-interaction checks alone.
 
 The simulator Python tests start their own temporary probe. For a nonstandard hardware checkout, set `PITHERMAL_TEST_HARDWARE` to its path. To run the companion project's Python tests, run the same unittest command from the `pithermal-hardware` folder.
 
