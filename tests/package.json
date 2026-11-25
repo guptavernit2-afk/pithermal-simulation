@@ -1,6 +1,9 @@
 {
   "name": "pithermal-circuit-checks",
   "private": true,
-  "scripts": { "test": "node --test circuit.test.cjs" },
+  "scripts": {
+    "test": "node --test circuit.test.cjs probe.test.cjs",
+    "test:circuit": "node --test circuit.test.cjs"
+  },
   "devDependencies": { "playwright-core": "1.65.1" }
 }

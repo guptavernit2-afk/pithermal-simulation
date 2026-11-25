@@ -27,6 +27,24 @@ h1 { font-size: clamp(2rem, 3.35vw, 3.2rem); line-height: 1.08; letter-spacing: 
 .intro { color: #506468; margin-top: 9px; line-height: 1.5; }
 .workbench { margin-top: 24px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(258px, 25.5%); gap: 16px; align-items: start; }
 .card { background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; box-shadow: 0 2px 6px #18292c09; }
+.bench-side { display: grid; min-width: 0; gap: 16px; }
+.probe-controls { padding: 16px 18px; }
+.temperature-control, .terminal-bar, .scale-ends { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.temperature-control label { font-size: .94rem; }
+#target-temperature { color: #285b51; font: 600 1.2rem var(--mono); }
+#temperature-slider { width: 100%; height: 24px; margin: 10px 0 0; accent-color: #32756b; cursor: pointer; }
+.scale-ends, .file-reading code, #monitor-status { font: .78rem var(--mono); }
+.scale-ends { color: #526767; }
+.file-reading { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.file-heading { font-size: .86rem; font-weight: 600; }
+.file-reading code { display: block; color: #53696b; margin: 4px 0; overflow-wrap: anywhere; }
+.file-reading output { font: 600 1rem var(--mono); }
+.file-reading div span { color: #53696b; font-size: .8rem; }
+#probe-error { margin-top: 9px; color: #863718; font-size: .88rem; }
+.terminal { background: #18292c; color: #e3eee6; padding: 12px 14px; }
+.terminal h3 { font-size: .93rem; font-weight: 600; }
+#monitor-status { color: #c5dccb; }
+#monitor-output { margin: 9px 0 0; padding: 6px 0; height: 7rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: .83rem/1.55 var(--mono); }
 .panel-bar { min-height: 54px; padding: 8px 18px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
 h2 { font-size: 1rem; letter-spacing: -.025em; font-weight: 650; }
 .zoom { display: inline-flex; border: 1px solid var(--line); border-radius: 5px; }

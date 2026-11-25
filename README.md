@@ -1,26 +1,38 @@
 # PiThermal Simulation
 
-An offline classroom simulator for **Operating Systems CCA · Project 13 · Raspberry Pi Temperature Monitoring System**. The circuit workbench lets a student trace the physical wiring from a Raspberry Pi 4B to a DS18B20 probe. Later phases connect that circuit to the hardware project's Python temperature monitor.
+An offline classroom simulator for **Operating Systems CCA · Project 13 · Raspberry Pi Temperature Monitoring System**. Trace the Pi 4B circuit, move the virtual DS18B20 slider, inspect its sensor file, and watch the hardware project's Python monitor sample it.
 
-**Current status — Phase 1 ready for review.** Click any of the five jumper wires or the pull-up resistor. Rings **A** and **B** mark its two terminals, and the inspector identifies the pins, breadboard contacts and electrical purpose. The real sensor reader and monitor live in the [companion hardware repository](https://github.com/guptavernit2-afk/pithermal-hardware).
+**Current status — Phase 2 ready for review.** The slider, on-disk file and live Python output are connected. The monitor runs from the [companion hardware repository](https://github.com/guptavernit2-afk/pithermal-hardware).
 
 ## Run the circuit workbench
 
-From the root of this checkout, start Python's local file server:
+Use Python 3.8 or later and a modern browser. For first-time setup, clone both repositories into the same parent folder:
 
 ```sh
-python -m http.server 8765 --bind 127.0.0.1 --directory web
+git clone https://github.com/guptavernit2-afk/pithermal-simulation.git
+git clone https://github.com/guptavernit2-afk/pithermal-hardware.git
+cd pithermal-simulation
 ```
 
-Open [the circuit workbench on this laptop](http://127.0.0.1:8765/). Use `python3` if that is the name of your Python 3 executable. A modern browser and this checkout are enough to run Phase 1 offline. Stop the server with Ctrl+C.
+If both checkouts are already on the laptop, start here. From the simulation repo root:
+
+```sh
+python -m simulator
+```
+
+Open [the local workbench](http://127.0.0.1:8765/). Use `python3` if that is your Python 3 command. After cloning, the simulator runs offline with the Python standard library. It creates one temporary probe at 25°C and starts one monitor process. Ctrl+C stops the service and its child process and removes the temporary device directory.
+
+- **Change temperature.** Drag the slider or use the arrow keys for exact 0.25°C steps. **Virtual sensor file** shows the raw contents in millidegrees. Hover over the filename for its full path, also printed by the launcher.
+- **Read the terminal.** **Python output** shows up to 60 recent lines captured from the companion process. The file changes as you move the slider. The monitor prints its next reading on its own two-second interval and warns only above 30°C.
+- **Troubleshooting.** For a differently named hardware checkout, run `python -m simulator --hardware-dir "../path to checkout"`. If the port is busy, stop the previous server or use `--port 8766` and open the URL the launcher prints. The earlier `python -m http.server 8765 --bind 127.0.0.1 --directory web` command still serves the standalone wiring diagram.
 
 Click a wire on the diagram, or Tab to its connection button and press Enter or Space. Try **1-Wire data** followed by **Pull-up resistor**. Both reach the DQ strip, but their other ends and purposes differ. Use **+** to enlarge the board, scroll to inspect its holes, and choose **Fit** to restore the whole drawing.
 
-![Circuit workbench with the data wire highlighted between GPIO4 and the DQ strip](docs/circuit-workbench.png)
+![PiThermal workbench showing the probe control, raw file and hardware monitor beside the circuit](docs/circuit-workbench.png)
 
 ## The classroom demo
 
-Wire selection is available in Phase 1. The remaining rows describe the planned sensor and terminal interactions for Phases 2 and 3.
+The first three rows are implemented. Gradual cooling and probe disconnection are planned for Phase 3.
 
 | What the presenter does | What the audience should see |
 | --- | --- |
@@ -47,33 +59,38 @@ The workbench shows a Raspberry Pi 4 with its 40-pin header, one three-pin DS18B
 
 The pin map and sensor connections follow the component datasheets. Voltage measurement, 1-Wire electrical timing and the physical probe's response to heat belong to the bench investigation. [Raspberry Pi 4 Model B datasheet, §5.1](https://datasheets.raspberrypi.com/rpi4/raspberry-pi-4-datasheet.pdf) · [DS18B20 datasheet](https://www.analog.com/media/en/technical-documentation/data-sheets/DS18B20.pdf)
 
-## Reproduce the Phase 1 browser checks
+## Reproduce the checks
 
-Keep the local server running. For automated checks, use Node.js 20 or later and an installed Edge (Windows default) or Chrome (macOS/Linux default). In a second terminal at the repository root, install the browser test tool once and run the suite:
+Keep `python -m simulator` running on its default port. The browser tests operate the slider in this local session. Use Node.js 20 or later and an installed Edge (Windows default) or Chrome (macOS/Linux default). In a second terminal at the simulation repository root:
 
 ```sh
 npm --prefix tests ci
 npm --prefix tests test
+python -B -m unittest discover -s tests -v
 ```
 
-The test dependency is limited to the `tests/` folder. To use Chrome on Windows, set `$env:PITHERMAL_BROWSER_CHANNEL = "chrome"` in PowerShell before running the tests.
+The npm installation is a one-time step for automated browser tests. To use Chrome on Windows, set `$env:PITHERMAL_BROWSER_CHANNEL = "chrome"` before running them. `npm --prefix tests run test:circuit` runs just the nine wiring checks. The Python tests start a separate temporary probe and verify cleanup. If testing with a nonstandard companion path, set `PITHERMAL_TEST_HARDWARE` to that checkout for the Python tests.
 
 **Phase 1 result on Windows: 9/9 passed in Edge and 9/9 in Chrome.** The checks click the drawing at independently specified positions, compare the two visible rings against the expected terminal coordinates, and check the inspector text. They also cover the resistor lead, keyboard selection, zoomed wire picking on a narrow screen, and loading with external requests blocked.
+
+**Phase 2 results on Windows.** All 13 browser checks passed in both Edge and Chrome, and all four Python service tests passed. The browser test moves the native slider, waits for the file viewer, independently reads the temporary file from disk, and checks the most recent timestamped terminal line. Refreshing the page reattached to the running session and received a new sample. After Ctrl+C, the launcher's recorded monitor PID had exited and the temporary device directory was gone.
+
+| Slider | Verified file contents | Verified Python output after the timestamp |
+| --- | ---: | --- |
+| 27.5°C | `27500` | `27.500 °C  NORMAL` |
+| 30°C | `30000` | `30.000 °C  NORMAL` |
+| 31.25°C | `31250` | `31.250 °C  WARNING` |
 
 ## How a slider movement reaches Python
 
 1. **Browser.** The presenter changes the virtual probe's temperature. A local Python service receives the value.
 2. **Virtual device.** The service converts °C to whole millidegrees and updates a temporary file such as `<devices-dir>/28-0123456789ab/temperature`. The file viewer displays the raw value. This directory models the device files Linux exposes through sysfs.
 3. **Existing monitor.** From the hardware checkout, the service starts `python -m src.monitor --devices-dir <devices-dir>`. The monitor discovers the probe and reads the file. Its defaults are a two-second interval and a warning strictly above 30°C.
-4. **Terminal.** The local service forwards the running process's output to the browser. This keeps one implementation of conversion, warnings and error recovery across both repositories. Each terminal line reflects a completed sample, so it can follow a slider movement by one sampling interval.
+4. **Terminal.** The service captures the child process's output and forwards updates to the browser using server-sent events. The hardware monitor owns the warning decision. Each terminal line reflects a completed sample, so it can follow a slider movement by one sampling interval.
 
 On a real Pi, the **Linux 1-Wire driver** supplies the file. In this demo, the **local service** supplies it. The monitor exercises the same file-reading interface in both cases. The diagram and file viewer make that OS boundary visible during the viva.
 
-## Planned monitor integration
-
-For Phase 2, place the checkouts side by side as `pithermal-simulation/` and `pithermal-hardware/`. The initial integration target is the [tested hardware monitor at revision 7493bf9](https://github.com/guptavernit2-afk/pithermal-hardware/tree/7493bf956623e0b35fc6f2a0a41b89893939c6cd). Using a recorded revision lets a teammate reproduce the demo later.
-
-After setup, the simulator should start with one local command, serve its browser assets from the laptop, and support repeated runs without an account, network access or a session timer. The launcher should identify missing prerequisites, stop its monitor process on shutdown, and clean up temporary readings. The verified launch command will be added when the launcher exists.
+The companion checkout used for verification was [hardware revision 7493bf9](https://github.com/guptavernit2-afk/pithermal-hardware/tree/7493bf956623e0b35fc6f2a0a41b89893939c6cd).
 
 ## Repository structure
 
@@ -87,14 +104,14 @@ pithermal-simulation/
 └── docs/           Verified demo evidence and diagrams for the CCA report
 ```
 
-The current circuit geometry and descriptions live in [wiring.js](web/wiring.js), its component drawing in [board.js](web/assets/board.js), and the browser checks in [circuit.test.cjs](tests/circuit.test.cjs). The simulator service directory is reserved for Phase 2.
+The circuit geometry lives in [wiring.js](web/wiring.js) and its drawing in [board.js](web/assets/board.js). The [local service](simulator/__main__.py) connects the [probe and child process](simulator/runtime.py) to the [browser controls](web/probe.js). The [sensor browser tests](tests/probe.test.cjs) exercise the full path.
 
 ## Build and review phases
 
 | Phase | Deliverable | What must pass before review |
 | --- | --- | --- |
-| **1 · Interactive circuit** | Local circuit workbench and connection inspector, ready for review. | Verified all six pairs of terminals, their purposes, keyboard selection, zoom alignment and local asset loading. |
-| **2 · Sensor-to-terminal path** | Connect the slider to the temporary device file and stream the hardware monitor's output. | Using the browser, set 27.5, 30 and 31.25°C. Verify each raw file value and the matching sampled terminal line. Check startup and shutdown. |
+| **1 · Interactive circuit** | Reviewed local circuit workbench and connection inspector. | Verified all six pairs of terminals, their purposes, keyboard selection, zoom alignment and local asset loading. |
+| **2 · Sensor-to-terminal path** | Working slider, virtual file and Python terminal, ready for review. | Verified the three requested temperatures, stream reconnection, startup and shutdown. |
 | **3 · Demonstration controls** | Add gradual warming, cooling, and probe disconnect/reconnect. | Observe a complete warning and recovery cycle. Disconnect during a run, verify the error, reconnect, and observe a fresh valid reading in the same process. |
 | **4 · Offline verification and handoff** | Finish one-command setup instructions, troubleshooting, and the classroom walkthrough. | From fresh checkouts, complete setup, disconnect from the network, launch the simulator, run the demo twice, and record results for the report. |
 
