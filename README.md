@@ -1,6 +1,8 @@
 # PiThermal Simulation
 
-An offline classroom simulator for **Operating Systems CCA · Project 13 · Raspberry Pi Temperature Monitoring System**. Trace the Pi 4B circuit, warm or unplug the virtual DS18B20, and watch the hardware project's Python monitor read its sensor file.
+A classroom simulator for **Operating Systems CCA · Project 13 · Raspberry Pi Temperature Monitoring System**. Trace the Pi 4B circuit, warm or unplug the virtual DS18B20, and watch the hardware project's Python monitor read its sensor file.
+
+**[Open the live simulator](https://pithermal-simulation.onrender.com/)**. The free Render service can take about a minute to wake after inactivity. Visitors share one virtual probe.
 
 **The laptop demo is ready.** The circuit, virtual sensor and live Python monitor have passed the classroom walkthrough. [Pre-deployment review](#pre-deployment-review) · [Two offline runs](#phase-4-offline-verification)
 
