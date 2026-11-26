@@ -76,7 +76,15 @@ The Windows laptop review passed **25 browser checks in Edge and 25 in Chrome**,
 | Interrupted sessions | Losing the live stream clears current readings and preserves log history. Temporary service errors recover without a page refresh. If the monitor process exits, warming and cooling stop and controls are disabled. |
 | Interface | The temperature display and full file path fit at 320 CSS pixels with enlarged text. Earlier log records can be selected and copied while new readings arrive. Keyboard users can inspect wires, components and the file path. |
 
-**Public hosting still needs a deployment test.** Uploading `web/` to a static host gives visitors the interactive circuit diagram. A live deployment also needs the Python service, the companion hardware checkout and a connection that supports server-sent events. The launcher currently binds to loopback and accepts local API requests. A public release needs an explicit hosting and access configuration, and a decision about whether visitors share the presenter's probe or get separate sessions.
+## Host the live demo on Render
+
+1. In the Render dashboard, choose **New → Blueprint** and select this repository and the `main` branch.
+2. Give the Blueprint a name and choose **Deploy Blueprint**. The checked-in [render.yaml](render.yaml) selects one free Python web service in Singapore. The build checks out the verified hardware-monitor revision automatically.
+3. When the service shows **Live**, open its `onrender.com` URL. Set 30°C, then 31.25°C, and check that the Python output switches from `NORMAL` to `WARNING`. Disconnect and reconnect the probe and confirm that the monitor keeps its PID.
+
+Everyone using that URL controls the same probe. The free instance can sleep after 15 minutes of inactivity and takes about a minute to wake. A fresh instance starts at 25°C. Open the link before presenting so the monitor has time to start. Local launches still use loopback. [Render free service limits](https://render.com/docs/free)
+
+For a circuit-only deployment in Vercel, import this repository, select the **Other** framework preset, and set the **Root Directory** to `web`. The static page supports zooming, wire selection and the inspector. The live controls and Python log require the Render service or a local launch.
 
 ## Phase 4 offline verification
 

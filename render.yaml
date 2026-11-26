@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: pithermal-simulation
+    runtime: python
+    plan: free
+    region: singapore
+    healthCheckPath: /healthz
+    buildCommand: >-
+      git init .render/hardware &&
+      git -C .render/hardware fetch --depth=1 https://github.com/guptavernit2-afk/pithermal-hardware.git 7493bf956623e0b35fc6f2a0a41b89893939c6cd &&
+      git -C .render/hardware checkout --detach FETCH_HEAD
+    startCommand: python -B -m simulator --hardware-dir .render/hardware
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.5"
