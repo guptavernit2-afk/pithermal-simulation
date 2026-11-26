@@ -4,7 +4,7 @@ A classroom simulator for **Operating Systems CCA · Project 13 · Raspberry Pi 
 
 **[Open the live simulator](https://pithermal-simulation.onrender.com/)**. The free Render service can take about a minute to wake after inactivity. Visitors share one virtual probe.
 
-**The laptop demo is ready.** The circuit, virtual sensor and live Python monitor have passed the classroom walkthrough. [Pre-deployment review](#pre-deployment-review) · [Two offline runs](#phase-4-offline-verification)
+The simulator runs the same Python monitor that will run on the physical Pi. The offline laptop demo and hosted demo have been tested. Physical wiring and sensor readings still need a bench test. [Companion hardware repository](https://github.com/guptavernit2-afk/pithermal-hardware) · [Offline verification](#phase-4-offline-verification)
 
 ## Prepare the laptop while online
 
@@ -54,7 +54,7 @@ Run the rows in order. Give Python time to print a new line before moving to the
 | Set 27.5°C, wait for `NORMAL`, then press **Disconnect probe** | The probe disappears from the drawing and the file viewer says **File absent**. Wait for Python to print `SENSOR ERROR  No DS18B20 found`. |
 | Press **Reconnect probe**, wait for 27.5°C, then move the slider to 28.25°C | The same file returns. Python first prints `27.500 °C  NORMAL`, then `28.250 °C  NORMAL`. The monitor PID stays the same. |
 
-To run the demo a second time from the beginning, press **Ctrl+C** in the launch terminal and wait for `Simulator stopped.` Start `python -m simulator` again and reopen the printed address. The new session has a fresh temporary directory, a new monitor and the original 25°C reading. Refreshing the browser during a run reopens the current session.
+To reset a local demo, press **Ctrl+C** in the launch terminal and wait for `Simulator stopped.` Start `python -m simulator` again and reopen the printed address. The new session starts at 25°C with a fresh temporary directory and monitor. For the hosted demo, reconnect the probe if needed, select **Hold**, and set the slider to 25°C. Refreshing the page shows the current session.
 
 ### Troubleshooting during the demo
 
@@ -65,7 +65,7 @@ To run the demo a second time from the beginning, press **Ctrl+C** in the launch
 | Only the wiring diagram appears | The static server serves the diagram alone. Start `python -m simulator` from the simulation repo and open the address it prints to get the live probe controls. |
 | The file changed but Python still shows the previous reading | Wait for the next timestamp. The monitor samples every two seconds. Exactly 30°C is `NORMAL`. |
 | The log says **Reconnecting…** | Leave the tab open. The controls pause and the last Python records remain available. Current readings return when the stream reconnects. |
-| The log says **Exited** | The Python monitor has stopped. Press Ctrl+C in the launch terminal and run `python -m simulator` again to start a fresh session. |
+| The log says **Exited** | For a local run, press Ctrl+C in the launch terminal and run `python -m simulator` again. For a hosted run, wait for the service to come back online or use the local demo. |
 
 ## Pre-deployment review
 
@@ -80,7 +80,11 @@ The Windows laptop review passed **25 browser checks in Edge and 25 in Chrome**,
 
 ## Host the live demo on Render
 
-1. In the Render dashboard, choose **New → Blueprint** and select this repository and the `main` branch.
+The [public deployment](https://pithermal-simulation.onrender.com/) was checked through the browser. Python printed `NORMAL` at 30°C and `WARNING` at 31.25°C. Cooling cleared the warning. Disconnecting produced `SENSOR ERROR`, and reconnecting restored readings in the same Python process.
+
+To deploy your own copy:
+
+1. In the Render dashboard, choose **New → Blueprint** and select this repository and the `main` branch. If it is missing from the connected repository list, use its public GitHub URL.
 2. Give the Blueprint a name and choose **Deploy Blueprint**. The checked-in [render.yaml](render.yaml) selects one free Python web service in Singapore. The build checks out the verified hardware-monitor revision automatically.
 3. When the service shows **Live**, open its `onrender.com` URL. Set 30°C, then 31.25°C, and check that the Python output switches from `NORMAL` to `WARNING`. Disconnect and reconnect the probe and confirm that the monitor keeps its PID.
 
@@ -163,6 +167,7 @@ On a real Pi, the **Linux 1-Wire driver** supplies the file. In this demo, the *
 ```text
 pithermal-simulation/
 ├── README.md       Project guide, circuit map, phase plan and review status
+├── render.yaml     Render deployment settings and pinned monitor revision
 ├── simulator/      Local service, virtual probe files and monitor process management
 ├── web/            Browser interface, circuit controls, file viewer and live terminal
 │   └── assets/     Local circuit artwork and other assets needed offline
@@ -179,6 +184,5 @@ The circuit geometry lives in [wiring.js](web/wiring.js) and its drawing in [boa
 | **1 · Interactive circuit** | Reviewed local circuit workbench and connection inspector. | Verified all six pairs of terminals, their purposes, keyboard selection, zoom alignment and local asset loading. |
 | **2 · Sensor-to-terminal path** | Reviewed slider, virtual file and Python terminal. | Verified the three requested temperatures, stream reconnection, startup and shutdown. |
 | **3 · Demonstration controls** | Reviewed warm, cool, hold, and disconnect/reconnect controls. | Verified a warning cleared during cooling and the same Python process recovered after the probe returned. |
-| **4 · Offline verification and handoff** | Laptop setup, one-command launch, troubleshooting and classroom walkthrough ready for review. | Completed two offline demos from fresh checkouts and verified the sensor, Python output and cleanup in each. |
-
-The team reviews each phase against the recorded checks before moving on.
+| **4 · Offline verification and handoff** | Laptop setup, one-command launch, troubleshooting and classroom walkthrough. | Completed two offline demos from fresh checkouts and verified the sensor, Python output and cleanup in each. |
+| **5 · Public deployment** | Live simulator on Render. | Verified the warning threshold, cooling and probe recovery through the public link. |
